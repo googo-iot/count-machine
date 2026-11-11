@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+build/
+dist/
+audit_report.html
+audit_trail_merged.xlsx
+audit_trail_merged.csv

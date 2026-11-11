@@ -1,0 +1,1414 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>계수기 리포트</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --text: #1d232b; --muted: #66707c; --line: #dfe3e8;
+  --accent: #1f6feb; --accent-soft: #e7f0ff; --alarm: #b42318; --alarm-soft: #fdecea; --row-alt: #fafbfc;
+  --overlay: rgba(10, 14, 20, .72); --head: #e3eaf4; --ok: #1a7f37;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12161b; --panel: #1a2027; --text: #e4e8ed; --muted: #95a0ad; --line: #2c343e;
+    --accent: #5b9dff; --accent-soft: #1c2c45; --alarm: #ff8a80; --alarm-soft: #3a1f1f; --row-alt: #1d242c;
+    --head: #28323e; --ok: #56d364;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.45 "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif; }
+header { padding: 16px 20px 0; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: end; justify-content: space-between; }
+h1 { margin: 0; font-size: 22px; }
+.meta { color: var(--muted); font-size: 14px; margin-top: 2px; word-break: break-all; }
+nav { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 14px; border-bottom: 1px solid var(--line); padding: 0 20px; }
+nav button { border: 0; background: none; color: var(--muted); padding: 10px 14px; font: inherit; cursor: pointer;
+  border-bottom: 2px solid transparent; }
+nav button.on { color: var(--accent); border-bottom: 2px solid var(--accent); font-weight: 600; }
+nav .count { font-size: 13px; margin-left: 4px; color: var(--muted); font-weight: 400; }
+main { padding: 16px 20px 40px; }
+.filters { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.filters label { display: flex; flex-direction: column; gap: 3px; font-size: 14px; color: var(--muted); }
+.filters label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 15px; }
+input, select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 8px; min-width: 0; }
+input[type=search] { width: 240px; }
+select { max-width: 340px; }
+.btn { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 6px;
+  padding: 6px 12px; font: inherit; cursor: pointer; text-decoration: none; display: inline-block; }
+.btn:hover { border-color: var(--accent); }
+.btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn:disabled { opacity: .55; cursor: default; }
+.hbtns { display: flex; flex-wrap: wrap; gap: 8px; }
+.summary { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 10px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; min-width: 120px; }
+.stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 14px; }
+.summary .pdf-open { margin-left: auto; align-self: center; }   /* 로그 개수 줄의 오른쪽 끝 */
+.stat.alarm b { color: var(--alarm); }
+.tablewrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+/* 큰 목록 표: 창 아래 끝까지만 차지하고 그 안에서 스크롤해, 내려도 열 머리글(sticky)이 늘 보인다. 높이는 fitTables() 가 정한다 */
+.tablewrap.fit { overflow: auto; max-height: var(--fit-h, 70vh); }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; vertical-align: top; }
+td.wrap { white-space: normal; min-width: 320px; word-break: break-word; }
+td.mono { font-variant-numeric: tabular-nums; }   /* 시각: 다른 칸과 같은 글꼴, 숫자 폭만 고정 */
+td.hash { font-family: Consolas, "Malgun Gothic", monospace; font-size: 14px; }   /* SHA-256 */
+th { position: sticky; top: 0; z-index: 1; background: var(--head); font-size: 14px; font-weight: 700; cursor: pointer; user-select: none; }
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+th .dir { color: var(--accent); margin-left: 3px; }
+.more { all: unset; cursor: pointer; color: var(--accent); font-size: 13px; margin-left: 8px; white-space: nowrap; }
+.more:hover { text-decoration: underline; }
+ul.details { margin: 4px 0 2px; padding-left: 18px; color: var(--muted); font-size: 15px; }
+ul.details .dt { font-variant-numeric: tabular-nums; margin-right: 6px; color: var(--accent); }
+/* 열 너비 조절 */
+th .rz { position: absolute; top: 0; right: -4px; bottom: 0; width: 9px; cursor: col-resize; z-index: 2; touch-action: none; }
+th .rz::after { content: ""; position: absolute; top: 20%; bottom: 20%; left: 4px; width: 1px; background: var(--line); }
+th:hover .rz::after, th .rz.on::after { background: var(--accent); width: 2px; top: 0; bottom: 0; }
+th:last-child .rz { right: 0; }
+body.resizing, body.resizing * { cursor: col-resize !important; user-select: none !important; }
+table.fixed { table-layout: fixed; }
+table.fixed th, table.fixed td { overflow: hidden; text-overflow: ellipsis; }
+table.fixed td.wrap { min-width: 0; }
+tbody tr:nth-child(even) { background: var(--row-alt); }
+tr.alarm td { color: var(--alarm); }
+tr.alarm td:first-child { box-shadow: inset 3px 0 0 var(--alarm); }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: var(--accent-soft); }
+td.bad { color: var(--alarm); font-weight: 600; }
+td.good { color: var(--ok); }
+td.muted { color: var(--muted); }
+mark { background: #ffe58f; color: inherit; border-radius: 2px; }
+@media (prefers-color-scheme: dark) { mark { background: #6b5a12; } }
+.pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 10px; color: var(--muted); }
+.empty { padding: 40px; text-align: center; color: var(--muted); }
+.hidden { display: none !important; }
+#b-start, #b-end { width: 170px; }   /* 기본 131px 의 1.3배 */
+.summary.in-filters { margin: 0 0 0 auto; gap: 8px; }   /* 검색 칸 오른쪽 끝 */
+.summary.in-filters .stat { padding: 4px 12px; min-width: 96px; }
+.summary.in-filters .stat b { font-size: 17px; }
+.summary.in-filters .stat span { font-size: 13px; }
+#v-batch .split { margin-top: 14px; }
+/* 왼쪽 표는 열 너비 합만큼, 남는 폭은 모두 오른쪽 그래프 칸 (최소 420px, 모자라면 표가 가로로 스크롤) */
+.split { display: grid; grid-template-columns: minmax(0, auto) minmax(420px, 1fr); gap: 14px; align-items: start; }
+.split-side { position: sticky; top: 10px; }   /* 위쪽을 왼쪽 표의 위쪽에 맞춘다 */
+@media (max-width: 1100px) {   /* 좁으면 그래프를 표 위로 */
+  .split { grid-template-columns: minmax(0, 1fr); }
+  .split-side { position: static; order: -1; }
+}
+tr.sel td { background: var(--accent-soft); }
+tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+#t-batch tbody tr { scroll-margin: 40px 0 12px; }   /* 화살표로 옮길 때 고정된 머리글에 가리지 않게 */
+.chart { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px 6px; }
+.chart-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+.chart-stats { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.chart-stats .stat { padding: 3px 10px; min-width: 72px; }
+.chart-stats .stat b { font-size: 16px; }
+.chart-stats .stat span { font-size: 12px; }
+#b-chart-body { position: relative; min-height: 40px; }
+/* 시작 사용자(왼쪽)와 이동 버튼(오른쪽)을 한 줄에 */
+.chart-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin: 0 0 10px; }
+.chart-row:empty { display: none; }
+.chart-user { display: flex; align-items: baseline; gap: 8px; font-size: 14px; }
+.chart-user span { color: var(--muted); }
+.chart-user em { font-style: normal; color: var(--muted); font-size: 13px; border: 1px solid var(--line); border-radius: 10px; padding: 0 8px; }
+#b-jump { margin: 0 0 0 auto; gap: 6px; }
+#b-jump .btn { padding: 4px 10px; font-size: 14px; }
+#b-jump:empty { display: none; }
+/* 배치 탭 'PDF 원본' 메뉴: 그 배치의 PDF(종류별) 중 하나를 골라 팝업 창으로 */
+.pdfmenu { position: relative; }
+.pdfmenu .menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 220px; padding: 4px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+.pdfmenu .menu button { display: flex; justify-content: space-between; gap: 12px; width: 100%; padding: 6px 10px; border: 0;
+  background: none; color: var(--text); font: inherit; font-size: 14px; text-align: left; border-radius: 5px; cursor: pointer; }
+.pdfmenu .menu button:hover, .pdfmenu .menu button:focus { background: var(--sel, rgba(0,120,212,.12)); outline: none; }
+.pdfmenu .menu button span { color: var(--muted); font-size: 13px; }
+#b-trials h3 { margin: 14px 0 6px; font-size: 15px; }
+#b-trials .trials { width: 100%; }
+#b-trials .trials th, #b-trials .trials td { padding: 6px 8px; font-size: 14px; }
+.chart svg { display: block; max-width: 100%; overflow: visible; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .axis { stroke: var(--muted); stroke-width: 1; }
+.chart .tick { fill: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.chart .axis-title { fill: var(--muted); font-size: 13px; }
+.chart .series { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.chart .ev { fill: var(--alarm); stroke: var(--panel); stroke-width: 2; }
+.chart .cross { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart .hover { fill: var(--accent); stroke: var(--panel); stroke-width: 2; }
+.chart .hit { fill: transparent; cursor: crosshair; }
+.chart .tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px 9px; font-size: 13px; line-height: 1.5; box-shadow: 0 2px 8px rgba(0,0,0,.15); white-space: nowrap; }
+.chart .tip .mono { font-variant-numeric: tabular-nums; }
+.chart .tip .ev-text { color: var(--alarm); }
+.banner { margin: 12px 20px 0; padding: 10px 14px; border-radius: 8px; background: var(--alarm-soft); color: var(--alarm);
+  border: 1px solid var(--alarm); }
+.banner .btn { margin-left: 10px; }
+.note { color: var(--muted); font-size: 14px; }
+
+/* 읽는 중 */
+.job { margin: 40px auto; max-width: 640px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 22px 24px; }
+.job h2 { margin: 0 0 6px; font-size: 18px; }
+.track { height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; margin: 14px 0 8px; }
+.fill { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+.job .row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.job .name { color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 대화상자 */
+.modal { position: fixed; inset: 0; background: var(--overlay); display: flex; align-items: flex-start; justify-content: center;
+  padding: 24px 16px; overflow-y: auto; z-index: 10; }
+.sheet { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; width: min(760px, 100%); padding: 18px 20px 22px; margin-top: 8vh; }
+.sheet-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+.sheet h2 { margin: 0; font-size: 20px; }
+.sheet .note { margin: 10px 0 14px; line-height: 1.6; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+.frow { display: flex; gap: 8px; align-items: center; }
+.frow.end { margin-top: 14px; justify-content: flex-end; }
+#root-input { flex: 1; font-family: Consolas, "Malgun Gothic", monospace; }
+.recent { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.recent:empty { display: none; }
+.recent::before { content: "최근 폴더"; color: var(--muted); font-size: 14px; align-self: center; margin-right: 2px; }
+.recent .btn { padding: 2px 8px; font-size: 14px; font-family: Consolas, "Malgun Gothic", monospace; }
+.msg { min-height: 1.4em; margin: 10px 0 0; font-size: 15px; }
+.msg.err { color: var(--alarm); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 15px; margin: 12px 0 0; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; word-break: break-all; }
+.sheet.wide { width: min(980px, 100%); margin-top: 4vh; }
+.sheet h3 { margin: 16px 0 6px; font-size: 16px; }
+.sheet .tablewrap { margin-top: 6px; }
+.jump { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+/* NG 이미지 */
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.card { all: unset; cursor: pointer; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; overflow: hidden; }
+.card:hover { border-color: var(--accent); }
+.card .pic { background: #000; aspect-ratio: 172 / 234; display: flex; align-items: center; justify-content: center; color: #8a939e; font-size: 13px; }
+.card .pic img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.card .cap { padding: 6px 8px; font-size: 13px; line-height: 1.4; }
+.card .cap b { color: var(--alarm); font-weight: 600; }
+.card .cap span { color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zoomimg { background: #000; border-radius: 8px; margin-top: 12px; display: flex; justify-content: center; }
+.zoomimg img { max-width: 100%; max-height: 68vh; image-rendering: auto; min-height: 200px; }
+
+@media (max-width: 640px) {
+  header, main { padding-left: 16px; padding-right: 16px; } nav { padding: 0 16px; } .banner { margin: 12px 16px 0; }
+  input[type=search] { width: 100%; } .filters label { flex: 1 1 140px; } select { max-width: 100%; }
+}
+@media print {
+  nav, .filters, .pager, .btn, .hbtns { display: none !important; }
+  body { background: #fff; color: #000; } .tablewrap { border: 0; overflow: visible; } .tablewrap.fit { max-height: none; }
+  th { position: static; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>계수기 리포트</h1>
+    <div class="meta" id="meta"></div>
+  </div>
+  <div class="hbtns" id="hbtns">
+    <button class="btn live" id="btn-root">폴더 설정</button>
+    <a class="btn live" id="btn-reload" href="/?reload">다시 읽기</a>
+    <button class="btn live primary" id="btn-xlsx">Excel 저장</button>
+    <button class="btn" id="btn-csv" title="지금 보이는 감사 추적 목록 (필터 적용)">CSV</button>
+  </div>
+</header>
+<div class="banner hidden" id="banner"></div>
+<nav id="tabs">
+  <button data-tab="audit" class="on">감사 추적<span class="count" id="n-audit"></span></button>
+  <button data-tab="batch">배치<span class="count" id="n-batch"></span></button>
+  <button data-tab="files">파일 목록<span class="count" id="n-files"></span></button>
+</nav>
+
+<main>
+  <section id="job" class="job hidden">
+    <h2>PDF 를 읽는 중</h2>
+    <div class="note" id="job-root"></div>
+    <div class="track"><div class="fill" id="job-fill"></div></div>
+    <div class="row">
+      <span id="job-count">준비 중…</span>
+      <button class="btn" id="job-cancel">중지</button>
+    </div>
+    <div class="name" id="job-name"></div>
+  </section>
+
+  <section id="v-audit">
+    <div class="filters">
+      <label>시작일<input type="date" id="f-start"></label>
+      <label>종료일<input type="date" id="f-end"></label>
+      <label>배치<select id="f-file"><option value="">전체</option></select></label>
+      <label>사용자<select id="f-user"><option value="">전체</option></select></label>
+      <label>검색<input type="search" id="f-q" placeholder="로그 · 사용자 · 시간"></label>
+      <label class="inline"><input type="checkbox" id="f-alarm"> 알람(강조)만</label>
+      <label class="inline"><input type="checkbox" id="f-open"> 상세 모두 펼치기</label>
+      <button class="btn" id="f-reset">초기화</button>
+    </div>
+    <div class="summary" id="a-summary"></div>
+    <div class="tablewrap fit"><table id="t-audit"></table></div>
+    <div class="pager" id="a-pager"></div>
+  </section>
+
+  <section id="v-files" class="hidden">
+    <div class="filters">
+      <label>검색<input type="search" id="g-q" placeholder="폴더 · 파일명"></label>
+      <label class="inline"><input type="checkbox" id="g-bad"> 문제 있는 파일만</label>
+    </div>
+    <div class="summary" id="f-summary"></div>
+    <div class="tablewrap fit"><table id="t-files"></table></div>
+    <div class="pager" id="g-pager"></div>
+  </section>
+
+  <section id="v-batch" class="hidden">
+    <div class="filters">
+      <label>시작일 (이후)<input type="date" id="b-start"></label>
+      <label>종료일 (이전)<input type="date" id="b-end"></label>
+      <label>레시피<select id="b-recipe"><option value="">전체</option></select></label>
+      <label>검색<input type="search" id="b-q" placeholder="배치 · 레시피 · 사용자 · 폴더"></label>
+      <label class="inline"><input type="checkbox" id="b-nobatch"> 배치 리포트 없는 배치만</label>
+      <div class="summary in-filters" id="b-summary"></div>
+    </div>
+    <div class="split">
+      <div class="split-main">
+        <div class="tablewrap fit"><table id="t-batch"></table></div>
+        <div class="pager" id="b-pager"></div>
+        <p class="note">행을 누르면 오른쪽에 그 배치의 수량, 병 계수 기록 그래프, 배치 생산 결과가 나오고,
+          '감사 추적' · 'NG 이미지' 버튼으로 그 배치의 내용을, 'PDF 원본' 으로 원본 PDF 를 창으로 볼 수 있습니다. ↑/↓ 키로 위아래 배치로 옮겨 갑니다.</p>
+      </div>
+      <aside class="split-side">
+        <div class="chart" id="b-chart">
+          <div class="chart-head"><b id="b-chart-title">레시피</b><div class="chart-stats" id="b-stats"></div></div>
+          <div class="chart-row">
+            <div class="chart-user hidden" id="b-user"></div>
+            <div class="jump" id="b-jump"></div>
+          </div>
+          <div id="b-chart-body"><p class="note">배치 행을 누르면 양품 수(가로)에 따른 병 리젝트 수(세로)를 보여 줍니다.</p></div>
+        </div>
+        <div id="b-trials"></div>
+      </aside>
+    </div>
+  </section>
+
+
+</main>
+
+<div class="modal hidden" id="m-root">
+  <div class="sheet">
+    <div class="sheet-head"><h2>PDF 루트 폴더</h2><button class="btn" data-close>닫기</button></div>
+    <p class="note">하위 폴더를 모두 찾아 파일명에 리포트 종류 단어(<span id="kw"></span>)가 들어간 PDF 를 읽습니다. 원본 PDF 는 바꾸지 않습니다.<br>
+      설정은 <span id="cfg-path"></span> 에 저장됩니다.</p>
+    <div class="field">경로
+      <div class="frow"><input id="root-input" spellcheck="false"><button class="btn" id="root-browse">찾아보기…</button></div>
+    </div>
+    <div class="recent" id="recent"></div>
+    <div class="msg" id="root-msg"></div>
+    <div class="frow end"><button class="btn primary" id="root-apply">적용</button></div>
+  </div>
+</div>
+
+<div class="modal hidden" id="m-row">
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="row-title">로그 상세</h2><button class="btn" data-close>닫기</button></div>
+    <div id="row-body"></div>
+    <dl class="kv" id="row-kv"></dl>
+  </div>
+</div>
+
+
+<script>
+const DATA = /*__DATA__*/null;
+const PAGE = 200;
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const fmtN = (n) => Number(n).toLocaleString("ko-KR");
+const FILE = {seq: 0, folder: 1, name: 2, status: 3, pages: 4, rows: 5, alarms: 6, badTime: 7, noUser: 8,
+              size: 9, mtime: 10, sha: 11, meta: 12, failed: 13, kind: 14, dup: 15};
+const metaIdx = (k) => DATA.meta_keys.indexOf(k);
+const fileMeta = (f, k) => metaIdx(k) < 0 ? "" : f[FILE.meta][metaIdx(k)];
+const KIND = DATA.kind_names || {};
+
+/* ---------- 상단 ---------- */
+document.querySelectorAll(".live").forEach((el) => el.classList.toggle("hidden", !DATA.live));
+const files = DATA.files, audit = DATA.audit;
+let bottle = DATA.bottle || [], ngs = DATA.ng || [];   // serve 에서는 처음 쓸 때 받는다 (loadRows)
+const batchList = DATA.batches || [];
+// 중복(다른 폴더에 같은 내용의 PDF 가 먼저 있음) 파일은 합계에서 뺀다
+const kindTotal = (kind) => files.reduce((s, f) => s + (f[FILE.kind] === kind && !f[FILE.dup] ? f[FILE.rows] : 0), 0);
+const alarmTotal = files.reduce((s, f) => s + (f[FILE.dup] ? 0 : f[FILE.alarms]), 0);
+$("#meta").textContent = DATA.source
+  ? `${DATA.source} · PDF ${fmtN(files.length)}건 · 배치 ${fmtN(batchList.length)}건` + (DATA.generated ? ` · ${DATA.generated} 읽음` : "")
+  : "PDF 루트 폴더가 지정되지 않았습니다.";
+$("#n-audit").textContent = fmtN(audit.length);
+$("#n-batch").textContent = fmtN(batchList.length);
+$("#n-files").textContent = fmtN(files.length);
+$("#kw").textContent = DATA.keyword || "AuditTrailLog";
+
+if (DATA.error) {
+  const b = $("#banner");
+  b.classList.remove("hidden");
+  b.innerHTML = esc(DATA.error) + (DATA.live ? ' <button class="btn" id="banner-root">폴더 설정</button>' : "");
+  const br = $("#banner-root");
+  if (br) br.onclick = openRoot;
+}
+
+/* ---------- 탭 ---------- */
+// 병 계수 기록은 배치 탭의 그래프로, NG 이미지는 배치 탭의 'NG 이미지' 버튼 창으로 본다
+const TABS = ["audit", "batch", "files"];
+let tab = "audit";
+/* 보이는 큰 표의 높이: 페이지 맨 위에서 볼 때 표 아래(쪽 넘김, 안내 문구까지)가 창 안에 들어오도록 */
+function fitTables() {
+  document.querySelectorAll(".tablewrap.fit").forEach((w) => {
+    if (!w.offsetParent) return;   // 숨은 탭
+    let below = 0;
+    for (let n = w.nextElementSibling; n; n = n.nextElementSibling) below += n.offsetHeight + 8;
+    const top = w.getBoundingClientRect().top + scrollY;
+    w.style.setProperty("--fit-h", Math.max(320, innerHeight - top - below - 16) + "px");
+  });
+}
+addEventListener("resize", () => fitTables());
+function showTab(t) {
+  tab = t;
+  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
+  for (const v of TABS) $("#v-" + v).classList.toggle("hidden", v !== t || !!DATA.job);
+  $("#btn-csv").classList.toggle("hidden", t !== "audit" || !!DATA.job);
+  try { sessionStorage.setItem("auditpdf.tab", t); } catch (e) {}
+  fitTables();
+}
+document.querySelectorAll("#tabs button").forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
+
+/* ---------- 열 너비 조절: 머리글 오른쪽 끝을 끌면 바뀌고, 표마다 이 브라우저에 저장된다 ---------- */
+const MIN_COL = 40;
+const widthKey = (el) => "auditpdf.colw." + el.id;
+function loadWidths(el, n) {
+  try {
+    const w = JSON.parse(localStorage.getItem(widthKey(el)));
+    return Array.isArray(w) && w.length === n && w.every((x) => x >= MIN_COL) ? w : null;
+  } catch (e) { return null; }
+}
+function saveWidths(el, w) {
+  try { w ? localStorage.setItem(widthKey(el), JSON.stringify(w)) : localStorage.removeItem(widthKey(el)); } catch (e) {}
+}
+function applyWidths(el, w) {
+  el.classList.toggle("fixed", !!w);
+  el.style.width = w ? w.reduce((s, x) => s + x, 0) + "px" : "";
+  let cg = el.querySelector("colgroup");
+  if (!w) { if (cg) cg.remove(); return; }
+  if (!cg) {
+    cg = document.createElement("colgroup");
+    cg.innerHTML = w.map(() => "<col>").join("");
+    el.prepend(cg);
+  }
+  cg.querySelectorAll("col").forEach((c, i) => (c.style.width = w[i] + "px"));
+}
+function startResize(el, i, e) {
+  e.preventDefault();
+  e.stopPropagation();
+  // 처음 끌 때는 지금 보이는 너비를 그대로 고정한 뒤 그 열만 바꾼다
+  const w = loadWidths(el, el.querySelectorAll("thead th").length) ||
+    [...el.querySelectorAll("thead th")].map((th) => Math.max(MIN_COL, Math.round(th.getBoundingClientRect().width)));
+  const x0 = e.clientX, w0 = w[i], handle = e.target;
+  try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+  handle.classList.add("on");
+  document.body.classList.add("resizing");
+  applyWidths(el, w);
+  handle.onpointermove = (ev) => { w[i] = Math.max(MIN_COL, Math.round(w0 + ev.clientX - x0)); applyWidths(el, w); };
+  handle.onpointerup = handle.onpointercancel = () => {
+    handle.onpointermove = handle.onpointerup = handle.onpointercancel = null;
+    handle.classList.remove("on");
+    document.body.classList.remove("resizing");
+    saveWidths(el, w);
+    el._resized = true;
+    setTimeout(() => (el._resized = false), 0);
+  };
+}
+
+/* ---------- 정렬 가능한 표 ---------- */
+/* 정렬: 행마다 정렬 값을 한 번만 구해 (글자는 소문자로) 코드 순서로 비교한다. 한글 음절은 코드 순서가 가나다 순이고,
+   Intl.Collator 보다 수십 배 빨라 감사 추적 수십만 행도 금방 정렬된다.
+   같은 목록·같은 열·같은 방향이면 앞서 정렬한 결과를 다시 쓴다 (쪽 넘김, 상세 펼치기 때 다시 정렬하지 않음) */
+const koCompare = new Intl.Collator("ko").compare;   // 짧은 목록(선택 상자 등)용
+const sortCache = new WeakMap();
+function sortRows(rows, get, dir) {
+  const keys = rows.map((r) => { const k = get(r); return typeof k === "number" ? k : String(k ?? "").toLowerCase(); });
+  const cmp = (x, y) => typeof x === "number" && typeof y === "number" ? x - y
+    : (x = String(x), y = String(y), x < y ? -1 : x > y ? 1 : 0);
+  const idx = keys.map((_, i) => i).sort((a, b) => cmp(keys[a], keys[b]) * dir || a - b);
+  return idx.map((i) => rows[i]);
+}
+function table(el, cols, rows, opts = {}) {
+  const state = el._sort || (el._sort = {key: opts.sort ?? null, dir: opts.dir ?? 1});
+  if (state.key !== null) {
+    const c = cols[state.key], hit = sortCache.get(rows);
+    if (hit && hit.col === c && hit.dir === state.dir) rows = hit.out;
+    else { const out = sortRows(rows, c.sort || c.get, state.dir); sortCache.set(rows, {col: c, dir: state.dir, out}); rows = out; }
+  }
+  const start = opts.page ? opts.page * PAGE : 0;
+  const shown = opts.paged ? rows.slice(start, start + PAGE) : rows;
+  const widths = loadWidths(el, cols.length) || opts.widths || null;   // 저장한 너비가 없으면 표의 기본 너비
+  el.innerHTML = (widths ? "<colgroup>" + widths.map((w) => `<col style="width:${w}px">`).join("") + "</colgroup>" : "") +
+    "<thead><tr>" + cols.map((c, i) =>
+    `<th data-i="${i}" class="${c.num ? "num" : ""}">${esc(c.label)}${state.key === i ? `<span class="dir">${state.dir > 0 ? "▲" : "▼"}</span>` : ""}` +
+    `<span class="rz" title="끌어서 너비 조절 · 두 번 클릭하면 이 표의 너비 초기화"></span></th>`).join("") +
+    "</tr></thead><tbody>" +
+    (shown.length ? shown.map((r, i) => `<tr class="${opts.rowClass ? opts.rowClass(r) : ""}" data-r="${start + i}">` +
+      cols.map((c) => `<td class="${c.cls ? (typeof c.cls === "function" ? c.cls(r) : c.cls) : c.num ? "num" : ""}">${c.html ? c.html(r) : esc(c.get(r))}</td>`).join("") +
+      "</tr>").join("") : `<tr><td colspan="${cols.length}" class="empty">표시할 항목이 없습니다.</td></tr>`) + "</tbody>";
+  applyWidths(el, widths);
+  el.querySelectorAll("th .rz").forEach((h) => {
+    h.onpointerdown = (e) => startResize(el, +h.parentNode.dataset.i, e);
+    h.onclick = (e) => e.stopPropagation();
+    h.ondblclick = (e) => { e.stopPropagation(); saveWidths(el, null); applyWidths(el, opts.widths || null); };
+  });
+  el.querySelectorAll("th").forEach((th) => (th.onclick = () => {
+    if (el._resized) return;  // 너비를 끈 직후의 클릭은 정렬로 보지 않는다
+    const i = +th.dataset.i;
+    state.dir = state.key === i ? -state.dir : 1;
+    state.key = i;
+    opts.onSort ? opts.onSort() : table(el, cols, rows, opts);
+  }));
+  if (opts.onRow) el.querySelectorAll("tbody tr[data-r]").forEach((tr) => (tr.onclick = () => opts.onRow(rows[+tr.dataset.r])));
+  return rows;
+}
+
+/* ---------- 감사 추적 ---------- */
+const A = {file: 0, time: 1, log: 2, user: 3, page: 4, line: 5, color: 6, details: 7};
+const D = {time: 0, text: 1, color: 2};   // 상세 내역 ('[...]' 행 뒤에 이어진 '=' 행)
+const toggled = new Set();                // '상세 모두 펼치기' 와 반대로 열거나 닫은 행
+const batchLabel = (f) => fileMeta(f, "BATCH NUMBER") || f[FILE.folder];
+const uniq = (xs) => [...new Set(xs.filter((x) => x !== "" && x != null))]
+  .sort((a, b) => typeof a === "number" && typeof b === "number" ? a - b : koCompare(String(a), String(b)));
+(function fillSelects() {
+  // 배치 선택: 그 종류의 리포트 파일 (내용이 있는 것만)
+  const fileOpts = (sel, kind) => files.forEach((f, i) => {
+    if (f[FILE.kind] === kind && f[FILE.rows] && !f[FILE.dup]) $(sel).add(new Option(`${batchLabel(f)} · ${f[FILE.folder]}`, i));
+  });
+  fileOpts("#f-file", "audit");
+  uniq(audit.map((r) => r[A.user])).forEach((u) => $("#f-user").add(new Option(u, u)));
+})();
+
+/* 병 계수 기록 / NG 이미지 목록: serve 에서는 처음 쓸 때(그래프, NG 이미지 창) 서버에서 받는다 */
+const loaded = {bottle: !DATA.lazy, ng: !DATA.lazy}, loading = {};
+function loadRows(kind) {
+  if (loaded[kind]) return Promise.resolve();
+  if (!loading[kind]) {
+    loading[kind] = fetch("/api/rows?kind=" + kind, {cache: "no-store"}).then((r) => r.json()).then((rows) => {
+      if (kind === "bottle") bottle = rows; else ngs = rows;
+      loaded[kind] = true;
+    });
+  }
+  return loading[kind];
+}
+
+/* 쪽 나눔: go(새 쪽 번호) */
+function pager(el, total, page, size, go) {
+  const pages = Math.max(1, Math.ceil(total / size));
+  el.innerHTML = total > size
+    ? `<button class="btn" data-go="-1" ${page ? "" : "disabled"}>이전</button>
+       <span>${fmtN(page * size + 1)}–${fmtN(Math.min(total, (page + 1) * size))} / ${fmtN(total)} (${page + 1}/${pages}쪽)</span>
+       <button class="btn" data-go="1" ${page + 1 < pages ? "" : "disabled"}>다음</button>` : "";
+  el.querySelectorAll("[data-go]").forEach((b) => (b.onclick = () => {
+    go(page + +b.dataset.go);
+    const wrap = el.previousElementSibling;
+    if (wrap && wrap.classList.contains("tablewrap")) wrap.scrollTop = 0;
+    window.scrollTo(0, 0);
+  }));
+  fitTables();   // 쪽 넘김 줄이 생기거나 없어지면 표 높이가 달라진다
+}
+
+let aPage = 0, aRows = [], query = "";
+const hl = (s) => {
+  const t = esc(s);
+  if (!query) return t;
+  const re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"), "gi");
+  return t.replace(re, (m) => `<mark>${m}</mark>`);
+};
+const dateOf = (t) => t.slice(0, 10).replace(/\//g, "-");
+const detailMatch = (r, q) => r[A.details].some((d) => d[D.text].toLowerCase().includes(q) || d[D.time].includes(q));
+function logCell(r) {
+  const ds = r[A.details];
+  if (!ds.length) return hl(r[A.log]);
+  const auto = $("#f-open").checked || (!!query && detailMatch(r, query.toLowerCase()));  // 검색어가 상세에 있으면 펼친다
+  const open = auto !== toggled.has(r);
+  return hl(r[A.log]) + `<button class="more" data-more>${open ? "▾" : "▸"} 상세 ${ds.length}</button>` +
+    (open ? `<ul class="details">${ds.map((d) => `<li>${d[D.time] !== r[A.time] ? `<span class="dt">${hl(d[D.time].slice(11))}</span>` : ""}${hl(d[D.text])}</li>`).join("")}</ul>` : "");
+}
+const detailText = (r) => r[A.details].map((d) => (d[D.time] !== r[A.time] ? `[${d[D.time]}] ` : "") + d[D.text]).join("\n");
+const AUDIT_COLS = [
+  {label: "시간", get: (r) => r[A.time], html: (r) => hl(r[A.time]), cls: "mono"},
+  {label: "로그", get: (r) => r[A.log], html: logCell, cls: "wrap"},
+  {label: "사용자", get: (r) => r[A.user], html: (r) => hl(r[A.user])},
+  {label: "배치", get: (r) => batchLabel(files[r[A.file]])},
+  {label: "장비", get: (r) => fileMeta(files[r[A.file]], "MACHINE ID")},
+  {label: "쪽", get: (r) => r[A.page], num: true},
+];
+
+function filterAudit() {
+  query = $("#f-q").value.trim();
+  const q = query.toLowerCase(), file = $("#f-file").value, user = $("#f-user").value;
+  const start = $("#f-start").value, end = $("#f-end").value, alarm = $("#f-alarm").checked;
+  aRows = audit.filter((r) =>
+    (file === "" || r[A.file] === +file) && (!user || r[A.user] === user) && (!alarm || r[A.color]) &&
+    (!start || dateOf(r[A.time]) >= start) && (!end || dateOf(r[A.time]) <= end) &&
+    (!q || r[A.log].toLowerCase().includes(q) || r[A.user].toLowerCase().includes(q) || r[A.time].includes(q) || detailMatch(r, q)));
+  if (aSel && !aRows.includes(aSel)) aSel = null;   // 고른 행이 필터로 빠지면 선택도 푼다
+  aPage = 0;
+  drawAudit();
+}
+
+function drawAudit() {
+  const nAlarm = aRows.reduce((s, r) => s + (r[A.color] ? 1 : 0), 0);
+  const nFiles = new Set(aRows.map((r) => r[A.file])).size;
+  $("#a-summary").innerHTML =
+    `<div class="stat"><b>${fmtN(aRows.length)}</b><span>로그</span></div>` +
+    `<div class="stat"><b>${fmtN(aRows.reduce((s, r) => s + r[A.details].length, 0))}</b><span>상세 내역 줄</span></div>` +
+    `<div class="stat alarm"><b>${fmtN(nAlarm)}</b><span>알람(강조) 행</span></div>` +
+    `<div class="stat"><b>${fmtN(nFiles)}</b><span>PDF</span></div>` +
+    `<button class="btn pdf-open" id="a-pdf" disabled>PDF 원본 보기</button>`;
+  $("#a-pdf").onclick = openAuditPdf;
+  const sorted = table($("#t-audit"), AUDIT_COLS, aRows, {
+    paged: true, page: aPage, rowClass: (r) => "click" + (r[A.color] ? " alarm" : "") + (r === aSel ? " sel" : ""),
+    onSort: drawAudit, onRow: selectAudit,
+  });
+  $("#t-audit").querySelectorAll("[data-more]").forEach((b) => (b.onclick = (e) => {
+    e.stopPropagation();
+    const r = sorted[+b.closest("tr").dataset.r];
+    toggled.has(r) ? toggled.delete(r) : toggled.add(r);
+    drawAudit();
+  }));
+  pager($("#a-pager"), sorted.length, aPage, PAGE, (p) => { aPage = p; drawAudit(); });
+  aRows._sorted = sorted;
+  updatePdfBtn();
+}
+
+/* 행 클릭 = 선택 (표시만 바꾼다). 'PDF 원본 보기' 는 선택한 행이 나온 PDF 를 그 쪽으로 연다 */
+let aSel = null;
+function selectAudit(r) {
+  aSel = r;
+  const i = (aRows._sorted || aRows).indexOf(r);
+  $("#t-audit").querySelectorAll("tr.sel").forEach((tr) => tr.classList.remove("sel"));
+  $("#t-audit").querySelector(`tbody tr[data-r="${i}"]`)?.classList.add("sel");
+  updatePdfBtn();
+}
+function updatePdfBtn() {
+  const btn = $("#a-pdf");
+  if (!btn) return;
+  const f = aSel && files[aSel[A.file]];
+  btn.disabled = !f;
+  btn.title = f ? `${f[FILE.name]} · ${aSel[A.page]}쪽 (팝업 창)` : "표에서 행을 먼저 고르세요";
+}
+function pdfUrl(fi, page) {
+  const f = files[fi], at = page ? `#page=${page}` : "";
+  if (DATA.live) return `/pdf?f=${fi}${at}`;
+  // 파일 하나로 된 리포트: 원본 경로를 직접 연다 (같은 PC 에서 볼 때)
+  const path = [DATA.source, f[FILE.folder] === DATA.source.split(/[\\/]/).pop() ? "" : f[FILE.folder], f[FILE.name]]
+    .filter(Boolean).join("\\");
+  return "file:///" + encodeURI(path.replace(/\\/g, "/")).replace(/#/g, "%23") + at;
+}
+function openAuditPdf() {
+  if (aSel) openPdfWindow(aSel[A.file], aSel[A.page]);
+}
+/* PDF 원본은 종류(배치 리포트 / 감사 추적 / 병 계수 기록 / NG 이미지)마다 따로 팝업 창 하나에서 연다
+   (같은 종류의 다른 PDF 를 열면 그 종류 창의 내용이 바뀐다). 감사 추적 탭의 버튼은 감사 추적 PDF 창을 쓴다.
+   브라우저 PDF 화면에는 스크립트를 넣을 수 없어, 창 전체를 채우는 iframe 으로 감싸고 창 위치·크기를 종류별로 기억한다 */
+function openPdfWindow(fi, page) {
+  const f = files[fi], kind = f[FILE.kind], g = popGeom("pdf-" + kind);
+  const w = window.open("", "auditpdf-pdf-" + kind,
+    `popup=yes,width=${Math.round(g.w)},height=${Math.round(g.h)},left=${Math.round(g.x)},top=${Math.round(g.y)}`);
+  if (!w) {
+    alert("팝업 창이 차단되었습니다.\n브라우저 주소창 오른쪽의 팝업 차단 표시를 눌러 이 사이트(127.0.0.1)의 팝업을 허용해 주세요.");
+    return;
+  }
+  const src = (DATA.live ? new URL(document.baseURI).origin : "") + pdfUrl(fi, page);
+  const title = `PDF 원본 (${KIND[kind] || kind}) · ${f[FILE.name]}${page ? ` · ${page}쪽` : ""}`;
+  w.document.open();
+  w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${esc(title)}</title>` +
+    `<style>html,body{margin:0;height:100%;background:#525659}iframe{display:block;border:0;width:100%;height:100%}</style></head>` +
+    `<body><iframe src="${esc(src)}" title="${esc(f[FILE.name])}"></iframe><script>` +
+    `const save=()=>{try{localStorage.setItem('auditpdf.popwin.pdf-${kind.replace(/\W/g, "")}',JSON.stringify({x:screenX,y:screenY,w:innerWidth,h:innerHeight}))}catch(e){}};` +
+    `addEventListener("beforeunload",save);addEventListener("pagehide",save);addEventListener("resize",save);setInterval(save,2000);` +
+    `<\/script></body></html>`);
+  w.document.close();
+  w.focus();
+}
+
+for (const id of ["#f-file", "#f-user", "#f-start", "#f-end", "#f-alarm"]) $(id).onchange = filterAudit;
+$("#f-open").onchange = () => { toggled.clear(); drawAudit(); };
+let qTimer;
+$("#f-q").oninput = () => { clearTimeout(qTimer); qTimer = setTimeout(filterAudit, 200); };
+function resetAudit() {
+  $("#f-q").value = $("#f-file").value = $("#f-user").value = $("#f-start").value = $("#f-end").value = "";
+  $("#f-alarm").checked = false;
+}
+$("#f-reset").onclick = () => { resetAudit(); filterAudit(); };
+
+$("#btn-csv").onclick = () => {
+  const head = ["TIME", "LOG", "상세 내역", "USER", "BATCH NUMBER", "MACHINE ID", "RECIPE NAME", "소스폴더", "파일명", "페이지", "페이지내행번호", "강조표시"];
+  const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const lines = [head.map(q).join(",")].concat((aRows._sorted || aRows).map((r) => {
+    const f = files[r[A.file]];
+    return [r[A.time], r[A.log], detailText(r), r[A.user], fileMeta(f, "BATCH NUMBER"), fileMeta(f, "MACHINE ID"), fileMeta(f, "RECIPE NAME"),
+      f[FILE.folder], f[FILE.name], r[A.page], r[A.line], r[A.color] ? "Y" : ""].map(q).join(",");
+  }));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["\ufeff" + lines.join("\r\n")], {type: "text/csv;charset=utf-8"}));
+  a.download = "audit_trail_filtered.csv";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+
+/* ---------- 파일 목록 ---------- */
+const problem = (f) => f[FILE.failed] || !f[FILE.rows] || f[FILE.badTime] || f[FILE.noUser];
+const FILE_COLS = [
+  {label: "#", get: (f) => f[FILE.seq], num: true},
+  {label: "폴더", get: (f) => f[FILE.folder]},
+  {label: "파일명", get: (f) => f[FILE.name]},
+  {label: "종류", get: (f) => KIND[f[FILE.kind]] || f[FILE.kind]},
+  {label: "상태", get: (f) => f[FILE.status], cls: (f) => f[FILE.status] === "OK" ? "good" : f[FILE.dup] ? "muted" : "bad",
+   html: (f) => f[FILE.dup] ? `<span title="같은 내용: #${f[FILE.dup]} ${esc(files[f[FILE.dup] - 1][FILE.folder])}">중복 (#${f[FILE.dup]})</span>` : esc(f[FILE.status])},
+  {label: "쪽", get: (f) => f[FILE.pages], num: true},
+  {label: "항목", get: (f) => f[FILE.rows], num: true, html: (f) => fmtN(f[FILE.rows])},
+  {label: "알람", get: (f) => f[FILE.alarms], num: true},
+  {label: "TIME 이상", get: (f) => f[FILE.badTime], num: true, cls: (f) => "num" + (f[FILE.badTime] ? " bad" : "")},
+  {label: "USER 공란", get: (f) => f[FILE.noUser], num: true, cls: (f) => "num" + (f[FILE.noUser] ? " bad" : "")},
+  {label: "크기(KB)", get: (f) => f[FILE.size], num: true, html: (f) => fmtN(Math.round(f[FILE.size] / 1024))},
+  {label: "수정 시각", get: (f) => f[FILE.mtime]},
+  {label: "SHA-256", get: (f) => f[FILE.sha], html: (f) => `<span title="${esc(f[FILE.sha])}">${esc(f[FILE.sha].slice(0, 12))}…</span>`, cls: "hash"},
+];
+
+function drawFiles() {
+  const q = $("#g-q").value.trim().toLowerCase(), bad = $("#g-bad").checked;
+  const rows = files.filter((f) => (!bad || problem(f)) &&
+    (!q || f[FILE.folder].toLowerCase().includes(q) || f[FILE.name].toLowerCase().includes(q)));
+  const nFail = files.filter((f) => f[FILE.failed]).length, nEmpty = files.filter((f) => !f[FILE.failed] && !f[FILE.rows]).length;
+  const nDup = files.filter((f) => f[FILE.dup]).length;
+  $("#f-summary").innerHTML =
+    `<div class="stat"><b>${fmtN(files.length)}</b><span>PDF</span></div>` +
+    `<div class="stat"><b>${fmtN(files.reduce((s, f) => s + f[FILE.pages], 0))}</b><span>쪽</span></div>` +
+    `<div class="stat alarm"><b>${fmtN(alarmTotal)}</b><span>알람(강조) 행</span></div>` +
+    `<div class="stat${nFail ? " alarm" : ""}"><b>${fmtN(nFail)}</b><span>읽기 실패</span></div>` +
+    `<div class="stat${nEmpty ? " alarm" : ""}"><b>${fmtN(nEmpty)}</b><span>내용 없음</span></div>` +
+    (nDup ? `<div class="stat" title="다른 폴더에 같은 내용(SHA-256)의 PDF 가 먼저 있어 화면과 Excel 에서 뺀 파일"><b>${fmtN(nDup)}</b><span>중복 (제외)</span></div>` : "");
+  gRows = rows;
+  gPage = 0;
+  renderFiles();
+}
+let gPage = 0, gRows = [];
+function renderFiles() {
+  const sorted = table($("#t-files"), FILE_COLS, gRows, {
+    paged: true, page: gPage, rowClass: (f) => "click", onSort: () => { gPage = 0; renderFiles(); },
+    onRow: (f) => openFile(files.indexOf(f)),
+  });
+  pager($("#g-pager"), sorted.length, gPage, PAGE, (p) => { gPage = p; renderFiles(); });
+}
+
+/* 파일 하나를 그 종류의 탭에서 연다 */
+function openFile(i) {
+  if (files[i][FILE.dup]) i = files[i][FILE.dup] - 1;   // 중복 파일은 같은 내용의 원본으로
+  const kind = files[i][FILE.kind];
+  if (kind === "audit") { resetAudit(); $("#f-file").value = String(i); filterAudit(); showTab("audit"); }
+  else if (kind === "bottle") {   // 병 계수 기록은 탭이 없으므로 배치 탭에서 그 배치를 골라 그래프로
+    const b = batchList.find((b) => b[B.kinds].bottle === i);
+    if (b) { showTab("batch"); selectBatch(b); }
+  } else if (kind === "ng") {   // NG 이미지는 탭이 없으므로 그 배치의 NG 이미지 창으로
+    const b = batchList.find((b) => b[B.kinds].ng === i);
+    if (b) openPopup(b, i);
+  }
+  else { const b = batchList.find((b) => b[B.kinds].batch === i); if (b) showBatch(b); }
+}
+let gqTimer;
+$("#g-q").oninput = () => { clearTimeout(gqTimer); gqTimer = setTimeout(drawFiles, 150); };
+$("#g-bad").onchange = drawFiles;
+
+/* ---------- 배치 (폴더 하나 = 배치 하나, 배치 리포트 요약과 생산 결과) ---------- */
+const B = {folder: 0, meta: 1, summary: 2, trials: 3, kinds: 4};
+const bMeta = (b, k) => b[B.meta][DATA.meta_keys.indexOf(k)] ?? "";
+const bSum = (b, k) => b[B.summary][(DATA.summary_keys || []).indexOf(k)] ?? "";
+const numOr = (v) => /^\d+$/.test(v) ? +v : v;
+const countBy = (rows) => rows.reduce((m, r) => (m[r[0]] = (m[r[0]] || 0) + 1, m), {});
+const nAudit = countBy(audit), nBottle = Object.fromEntries(files.map((f, i) => [i, f[FILE.rows]])), nNg = nBottle;
+const nAlarm = Object.fromEntries(files.map((f, i) => [i, f[FILE.alarms]]));
+const kindCount = (b, kind, counts) => b[B.kinds][kind] === undefined ? "" : counts[b[B.kinds][kind]] || 0;
+const BATCH_COLS = [
+  {label: "시작", get: (b) => bMeta(b, "BATCH START TIME"), cls: "mono"},
+  {label: "종료", get: (b) => bMeta(b, "BATCH STOP TIME"), cls: "mono"},
+  {label: "레시피", get: (b) => bMeta(b, "RECIPE NAME")},
+  {label: "배치 번호", get: (b) => bMeta(b, "BATCH NUMBER") || b[B.folder]},
+  {label: "목표", get: (b) => numOr(bSum(b, "TARGET PRODUCTION BOTTLE COUNT")), num: true},
+  {label: "양품[병]", get: (b) => numOr(bSum(b, "PASSED BOTTLE COUNT")), num: true},
+  {label: "불량[병]", get: (b) => numOr(bSum(b, "REJECTED BOTTLE COUNT")), num: true},
+  {label: "불량[제품]", get: (b) => numOr(bSum(b, "NG-REJECTED PRODUCT COUNT")), num: true},
+  {label: "총수량", get: (b) => kindCount(b, "bottle", nBottle), num: true},   // 병 계수 기록 행 수
+  {label: "알람 횟수", get: (b) => kindCount(b, "audit", nAlarm), num: true},  // 감사 추적의 알람(강조) 행 수
+  {label: "NG 이미지", get: (b) => kindCount(b, "ng", nNg), num: true},
+  {label: "생산 횟수", get: (b) => b[B.trials].length, num: true},
+];
+// 기본 열 너비(px). 순서는 BATCH_COLS 와 같다. 표가 이 너비만 쓰고 남는 폭은 오른쪽 그래프 칸이 쓴다.
+const BATCH_WIDTHS = [190, 190, 300, 143, 73, 102, 106, 106, 95, 90, 110, 115];
+// 열 순서를 바꾸기 전에 저장한 너비는 순서를 맞춰 준다 (각각 한 번만)
+//  v2: '생산 횟수' 를 맨 끝으로.  v3: '로그'(8) 자리에 '총수량'(9) 을 앞으로, '로그' 는 '알람 횟수' 로.
+try {
+  const key = "auditpdf.colw.t-batch";
+  let w = JSON.parse(localStorage.getItem(key));
+  if (Array.isArray(w) && w.length === 12) {
+    if (!localStorage.getItem(key + ".v2")) w = w.slice(0, 8).concat(w.slice(9), [w[8]]);
+    if (!localStorage.getItem(key + ".v3")) w = w.slice(0, 8).concat([w[9], w[8]], w.slice(10));
+    localStorage.setItem(key, JSON.stringify(w));
+  }
+  localStorage.setItem(key + ".v2", "1");
+  localStorage.setItem(key + ".v3", "1");
+} catch (e) {}
+
+function drawBatch() {
+  const q = $("#b-q").value.trim().toLowerCase(), noBatch = $("#b-nobatch").checked, recipe = $("#b-recipe").value;
+  const inRange = dateFilter();
+  const rows = batchList.filter((b) => (!noBatch || b[B.kinds].batch === undefined) &&
+    (!recipe || bMeta(b, "RECIPE NAME") === recipe) && inRange(b) &&
+    (!q || [b[B.folder], ...b[B.meta], ...b[B.summary]].some((v) => String(v).toLowerCase().includes(q))));
+  const sum = (k) => rows.reduce((s, b) => s + (+bSum(b, k) || 0), 0);
+  $("#b-summary").innerHTML =
+    `<div class="stat"><b>${fmtN(rows.length)}</b><span>배치</span></div>` +
+    `<div class="stat"><b>${fmtN(sum("PASSED BOTTLE COUNT"))}</b><span>양품[병] 합계</span></div>` +
+    `<div class="stat alarm"><b>${fmtN(sum("REJECTED BOTTLE COUNT"))}</b><span>불량[병] 합계</span></div>` +
+    `<div class="stat alarm"><b>${fmtN(sum("NG-REJECTED PRODUCT COUNT"))}</b><span>불량[제품] 합계</span></div>`;
+  bRows = rows;
+  bPage = 0;
+  renderBatch();
+}
+
+/* 배치 표: 한 쪽에 PAGE 행씩 (천 행 넘게 한 번에 그리면 필터를 바꿀 때마다 화면이 굳는다) */
+let bPage = 0, bRows = [];
+function renderBatch() {
+  const sorted = table($("#t-batch"), BATCH_COLS, bRows, {
+    paged: true, page: bPage, rowClass: (b) => "click" + (b === selBatch ? " sel" : ""),
+    onSort: () => { bPage = 0; renderBatch(); }, onRow: selectBatch, widths: BATCH_WIDTHS,
+  });
+  pager($("#b-pager"), sorted.length, bPage, PAGE, (p) => { bPage = p; renderBatch(); });
+  bRows._sorted = sorted;
+}
+/* 선택 표시만 바꾼다. 선택한 배치가 다른 쪽에 있으면 그 쪽으로 넘긴다 */
+function markBatch(b) {
+  const i = (bRows._sorted || bRows).indexOf(b);
+  if (i >= 0 && Math.floor(i / PAGE) !== bPage) { bPage = Math.floor(i / PAGE); renderBatch(); return; }
+  $("#t-batch").querySelectorAll("tr.sel").forEach((tr) => tr.classList.remove("sel"));
+  $("#t-batch").querySelector(`tbody tr[data-r="${i}"]`)?.classList.add("sel");
+}
+
+/* 시작일/종료일 조건 (YYYY-MM-DD). 시작일: 배치 시작이 그날 이후, 종료일: 배치 종료가 그날 이전 (종료 시각이 없으면 시작 시각으로) */
+function dateFilter() {
+  const from = $("#b-start").value, to = $("#b-end").value;
+  return (b) => (!from || dateOf(bMeta(b, "BATCH START TIME")) >= from) &&
+    (!to || dateOf(bMeta(b, "BATCH STOP TIME") || bMeta(b, "BATCH START TIME")) <= to);
+}
+
+/* 레시피 목록: 시작일/종료일 안에 있는 배치들의 레시피 이름 (배치 수와 함께).
+   고른 레시피가 그 기간에 없으면 '전체' 로 돌린다 */
+function fillRecipes() {
+  const sel = $("#b-recipe"), cur = sel.value, inRange = dateFilter(), n = {};
+  batchList.forEach((b) => { const r = bMeta(b, "RECIPE NAME"); if (r && inRange(b)) n[r] = (n[r] || 0) + 1; });
+  sel.innerHTML = `<option value="">전체</option>` + Object.keys(n).sort(koCompare)
+    .map((r) => `<option value="${esc(r)}">${esc(r)} (${fmtN(n[r])})</option>`).join("");
+  sel.value = n[cur] ? cur : "";
+}
+fillRecipes();
+$("#b-recipe").onchange = drawBatch;
+$("#b-start").onchange = $("#b-end").onchange = () => { fillRecipes(); drawBatch(); };
+
+/* 배치 행 선택 → 오른쪽 위 그래프 */
+let selBatch = null;
+function selectBatch(b) {
+  selBatch = b;
+  markBatch(b);
+  $("#b-chart-title").textContent = [bMeta(b, "RECIPE NAME"), bMeta(b, "BATCH NUMBER") || b[B.folder]].filter(Boolean).join(" · ");
+  // 제목 오른쪽: 총수량(병 계수 기록 행 수), 총양품, 총불량 (배치 리포트 요약 값)
+  const stat = (v, label, cls = "") => `<div class="stat${cls}"><b>${v === "" ? "-" : fmtN(v)}</b><span>${label}</span></div>`;
+  $("#b-stats").innerHTML = stat(kindCount(b, "bottle", nBottle), "총수량") +
+    stat(numOr(bSum(b, "PASSED BOTTLE COUNT")), "총양품수량") + stat(numOr(bSum(b, "REJECTED BOTTLE COUNT")), "총불량수량", " alarm");
+  drawSideTrials();
+  const user = bSum(b, "BATCH START USER"), title = bSum(b, "BATCH START USER TITLE");
+  $("#b-user").innerHTML = `<span>시작 사용자</span><b>${user ? esc(user) : "-"}</b>` + (title ? `<em>${esc(title)}</em>` : "");
+  $("#b-user").classList.remove("hidden");
+  $("#b-jump").innerHTML = jumpHtml(b, ["audit", "ng"]);   // 병 계수 기록은 그래프로 보이므로 버튼을 두지 않는다
+  $("#b-jump").querySelectorAll("[data-open]").forEach((btn) => (btn.onclick = () => openPopup(b, +btn.dataset.open)));
+  addPdfMenu($("#b-jump"), b);
+  drawBatchChart();
+}
+/* 'PDF 원본 ▾': 그 배치 폴더의 PDF 를 종류별로 보여 주고, 고르면 PDF 원본 팝업 창(감사 추적 탭과 같은 창)에서 연다 */
+function addPdfMenu(box, b) {
+  const items = ["batch", "audit", "bottle", "ng"].filter((k) => b[B.kinds][k] !== undefined)
+    .map((k) => [b[B.kinds][k], KIND[k] || k]);
+  if (!items.length) return;
+  const wrap = document.createElement("div");
+  wrap.className = "pdfmenu";
+  wrap.innerHTML = `<button class="btn" aria-haspopup="true" aria-expanded="false" title="이 배치의 원본 PDF 를 팝업 창으로 엽니다">PDF 원본 ▾</button>` +
+    `<div class="menu hidden" role="menu">` + items.map(([fi, name]) =>
+      `<button role="menuitem" data-fi="${fi}" title="${esc(files[fi][FILE.name])}">${esc(name)}<span>${fmtN(files[fi][FILE.pages] || 0)}쪽</span></button>`).join("") + `</div>`;
+  box.appendChild(wrap);
+  const btn = wrap.firstChild, menu = wrap.lastChild;
+  const close = () => { menu.classList.add("hidden"); btn.setAttribute("aria-expanded", "false"); };
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    if (!menu.classList.toggle("hidden")) { btn.setAttribute("aria-expanded", "true"); menu.querySelector("button").focus(); }
+    else close();
+  };
+  menu.onclick = (e) => {
+    const it = e.target.closest("[data-fi]");
+    if (it) { close(); openPdfWindow(+it.dataset.fi, 0); }
+  };
+  menu.onkeydown = (e) => {   // ↑/↓ 로 항목 이동, Esc 로 닫기 (배치 목록 이동 키와 겹치지 않게 여기서 멈춘다)
+    const its = [...menu.querySelectorAll("button")], i = its.indexOf(document.activeElement);
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault(); e.stopPropagation();
+      its[(i + (e.key === "ArrowDown" ? 1 : its.length - 1)) % its.length].focus();
+    } else if (e.key === "Escape") { e.stopPropagation(); close(); btn.focus(); }
+  };
+}
+// 메뉴 밖을 누르면 닫는다 (배치를 고를 때마다 메뉴를 새로 만들므로 처리기는 하나만 둔다)
+document.addEventListener("click", (e) => {
+  document.querySelectorAll(".pdfmenu").forEach((w) => {
+    if (!w.contains(e.target)) { w.lastChild.classList.add("hidden"); w.firstChild.setAttribute("aria-expanded", "false"); }
+  });
+});
+/* 그 배치의 감사 추적 · 병 계수 기록 · NG 이미지로 가는 버튼 */
+function jumpHtml(b, kinds = ["audit", "ng"]) {
+  const k = b[B.kinds];
+  return [["audit", "감사 추적", nAudit], ["bottle", "병 계수 기록", nBottle], ["ng", "NG 이미지", nNg]]
+    .filter(([kind]) => kinds.includes(kind) && k[kind] !== undefined)
+    .map(([kind, name, counts]) => `<button class="btn" data-open="${k[kind]}">${name} ${fmtN(counts[k[kind]] || 0)} →</button>`).join("");
+}
+// 오른쪽 칸이 넓으면 연도까지 다 보여 주고, 좁으면 줄인다
+function drawSideTrials() {
+  $("#b-trials").innerHTML = `<h3>배치 생산 결과</h3>` + trialsHtml(selBatch, $("#b-chart").clientWidth < 600);
+}
+function trialsHtml(b, compact = false) {
+  const trials = b[B.trials];
+  if (!trials.length) {
+    return `<p class="note">${b[B.kinds].batch === undefined ? "이 폴더에 배치 리포트(Batch) PDF 가 없습니다." : "생산 결과가 없습니다."}</p>`;
+  }
+  // 오른쪽 좁은 칸에서는 연도를 빼고 (전체 시각은 마우스를 올리면 보인다) 머리글을 줄인다
+  const tm = (v) => compact ? `<span title="${esc(v)}">${esc(String(v).replace(/^\d{4}[\/-]/, ""))}</span>` : esc(v);
+  const head = compact ? ["양품", "불량", "불량[제품]"] : ["양품[병]", "불량[병]", "불량[제품]"];
+  return `<div class="tablewrap"><table class="trials"><thead><tr><th>#</th><th>시작</th><th>종료</th>` +
+    head.map((h) => `<th class="num">${h}</th>`).join("") + `</tr></thead><tbody>` +
+    trials.map((t) => `<tr><td>${esc(t[0])}</td><td class="mono">${tm(t[1])}</td><td class="mono">${tm(t[2])}</td>` +
+      t.slice(3).map((v) => `<td class="num">${esc(v)}</td>`).join("") + "</tr>").join("") + "</tbody></table></div>";
+}
+function drawBatchChart() {
+  const b = selBatch, body = $("#b-chart-body");
+  if (!b) return;
+  const fi = b[B.kinds].bottle;
+  if (fi === undefined) { body.innerHTML = `<p class="note">이 폴더에 병 계수 기록(BottleCountLog) PDF 가 없습니다.</p>`; return; }
+  if (!loaded.bottle) body.innerHTML = `<p class="note">병 계수 기록을 받는 중…</p>`;
+  const token = ++chartToken;
+  loadRows("bottle").then(() => {
+    if (token === chartToken) drawCountChart(body, bottleOf(fi));   // 받는 사이 다른 배치를 골랐으면 그리지 않는다
+  }).catch((e) => { body.innerHTML = `<p class="note">받지 못했습니다: ${esc(e.message)}</p>`; });
+}
+// 창 크기나 왼쪽 표의 열 너비가 바뀌어 그래프 칸 폭이 달라지면 다시 그린다
+let chartResize, chartW = 0;
+new ResizeObserver(() => {
+  const w = $("#b-chart-body").clientWidth;
+  if (!w || w === chartW) return;
+  chartW = w;
+  clearTimeout(chartResize);
+  chartResize = setTimeout(() => { if (selBatch) { drawSideTrials(); drawBatchChart(); } }, 150);
+}).observe($("#b-chart-body"));
+let bqTimer;   // 글자를 칠 때마다 다시 그리지 않고 잠깐 멈추면 그린다
+$("#b-q").oninput = () => { clearTimeout(bqTimer); bqTimer = setTimeout(drawBatch, 150); };
+$("#b-nobatch").onchange = drawBatch;
+
+function showBatch(b) {
+  $("#row-title").textContent = `배치 ${bMeta(b, "BATCH NUMBER") || b[B.folder]}`;
+  $("#row-body").innerHTML = `<div class="jump">${jumpHtml(b)}</div>` +
+    `<h3>배치 생산 결과</h3>` + trialsHtml(b) + `<h3>배치 정보</h3>`;
+  $("#row-kv").innerHTML = [["폴더", b[B.folder]]]
+    .concat(DATA.meta_keys.map((key) => [key, bMeta(b, key)]))
+    .concat((DATA.summary_keys || []).map((key) => [key, bSum(b, key)]))
+    .map(([key, v]) => `<dt>${esc(key)}</dt><dd>${esc(v)}</dd>`).join("");
+  $("#row-body").querySelectorAll("[data-open]").forEach((btn) => (btn.onclick = () => {
+    $("#m-row").classList.add("hidden");
+    openFile(+btn.dataset.open);
+  }));
+  $("#m-row").classList.remove("hidden");
+}
+
+/* 배치 탭 오른쪽 위 그래프: x 양품 누계, y 불량(리젝트) 누계. 두 값 모두 시간 순으로 늘어나기만 하므로 계단선으로 그린다. */
+let bottleByFile = null, chartToken = 0;
+function bottleOf(fi) {
+  if (!bottleByFile) {
+    bottleByFile = new Map();
+    for (const r of bottle) (bottleByFile.get(r[0]) || bottleByFile.set(r[0], []).get(r[0])).push(r);
+  }
+  return bottleByFile.get(fi) || [];
+}
+function niceTicks(max, n) {
+  if (max <= 0) return [0, 1];
+  const raw = max / n, mag = 10 ** Math.floor(Math.log10(raw));
+  const step = Math.max(1, [1, 2, 5, 10].map((m) => m * mag).find((s) => s >= raw));
+  const ticks = [];
+  for (let v = 0; v < max + step; v += step) { ticks.push(v); if (v >= max) break; }
+  return ticks;
+}
+function drawCountChart(el, rows) {
+  if (!rows.length) { el.innerHTML = `<p class="note">병 계수 기록이 없습니다.</p>`; return; }
+  const xs = rows.map((r) => +r[C.passed] || 0), ys = rows.map((r) => +r[C.rejected] || 0);
+  const W = Math.max(280, el.clientWidth), H = Math.round(Math.min(416, Math.max(208, W * 0.44))), m = {l: 52, r: 16, t: 12, b: 40};
+  const xt = niceTicks(Math.max(...xs), 6), yt = niceTicks(Math.max(...ys), 5);
+  const xMax = xt[xt.length - 1], yMax = yt[yt.length - 1];
+  const X = (v) => m.l + v / xMax * (W - m.l - m.r), Y = (v) => H - m.b - v / yMax * (H - m.t - m.b);
+  // 불량 값이 바뀌는 점만 남겨도 계단선 모양은 같다 (수만 점 → 수백 점)
+  let d = `M${X(xs[0]).toFixed(1)},${Y(ys[0]).toFixed(1)}`;
+  for (let i = 1; i < rows.length; i++) {
+    if (ys[i] !== ys[i - 1]) d += `H${X(xs[i]).toFixed(1)}V${Y(ys[i]).toFixed(1)}`;
+  }
+  d += `H${X(xs[xs.length - 1]).toFixed(1)}`;
+  const events = rows.map((r, i) => i).filter((i) => isEvent(rows[i]));
+  const grid = yt.map((v) => `<line class="grid" x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}"/>` +
+      `<text class="tick" x="${m.l - 8}" y="${Y(v) + 4}" text-anchor="end">${fmtN(v)}</text>`).join("") +
+    xt.map((v) => `<text class="tick" x="${X(v)}" y="${H - m.b + 18}" text-anchor="middle">${fmtN(v)}</text>`).join("");
+  const dots = events.slice(0, 2000).map((i) => `<circle class="ev" cx="${X(xs[i]).toFixed(1)}" cy="${Y(ys[i]).toFixed(1)}" r="4"/>`).join("");
+  const last = rows.length - 1;
+  el.innerHTML =
+    `<svg width="${W}" height="${H}" role="img" aria-label="양품 누계에 따른 불량 누계">` + grid +
+    `<line class="axis" x1="${m.l}" x2="${W - m.r}" y1="${Y(0)}" y2="${Y(0)}"/>` +
+    `<path class="series" d="${d}"/>` + dots +
+    `<line class="cross hidden" y1="${m.t}" y2="${H - m.b}"/><circle class="hover hidden" r="5"/>` +
+    `<text class="axis-title" x="${(m.l + W - m.r) / 2}" y="${H - 4}" text-anchor="middle">양품 [병]</text>` +
+    `<text class="axis-title" transform="translate(13,${(m.t + H - m.b) / 2}) rotate(-90)" text-anchor="middle">불량 (리젝트) [병]</text>` +
+    `<rect class="hit" x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}"/></svg>` +
+    `<div class="tip hidden"></div>`;
+  const svg = el.querySelector("svg"), tip = el.querySelector(".tip");
+  const cross = svg.querySelector(".cross"), hov = svg.querySelector(".hover");
+  svg.querySelector(".hit").onmousemove = (e) => {
+    const box = svg.getBoundingClientRect();
+    const v = (e.clientX - box.left - m.l) / (W - m.l - m.r) * xMax;
+    // 양품 누계가 v 이하인 마지막 행 (xs 는 늘어나기만 한다)
+    let lo = 0, hi = last;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (xs[mid] <= v) lo = mid; else hi = mid - 1; }
+    const r = rows[lo], cx = X(xs[lo]), cy = Y(ys[lo]);
+    cross.setAttribute("x1", cx); cross.setAttribute("x2", cx);
+    hov.setAttribute("cx", cx); hov.setAttribute("cy", cy);
+    cross.classList.remove("hidden"); hov.classList.remove("hidden");
+    tip.innerHTML = `<div class="mono">${esc(r[C.time])}</div><div>양품 <b>${fmtN(xs[lo])}</b> · 불량 <b>${fmtN(ys[lo])}</b></div>` +
+      (isEvent(r) ? `<div class="ev-text">${esc(r[C.result])}</div>` : "") + `<div class="note">${r[C.page]}쪽</div>`;
+    tip.classList.remove("hidden");
+    const eb = el.getBoundingClientRect(), ox = box.left - eb.left, oy = box.top - eb.top;   // .chart 안에서 svg 의 위치
+    tip.style.left = ox + (cx + 12 + tip.offsetWidth > W ? cx - 12 - tip.offsetWidth : cx + 12) + "px";
+    tip.style.top = oy + Math.max(0, cy - tip.offsetHeight - 10) + "px";
+  };
+  svg.querySelector(".hit").onmouseleave = () => [cross, hov, tip].forEach((n) => n.classList.add("hidden"));
+}
+
+/* ---------- 병 계수 기록 행 (배치 탭 그래프용) ---------- */
+const C = {file: 0, time: 1, passed: 2, rejected: 3, prod: 4, result: 5, page: 6};
+const isEvent = (r) => r[C.result] !== "-" && r[C.result] !== "";
+
+/* ---------- 별도 창: 그 배치의 감사 추적 / NG 이미지 ----------
+   브라우저의 진짜 창(window.open)으로 띄운다. 운영체제 창이라 다른 모니터로 옮기고 크기를 바꿀 수 있다.
+   창 안의 화면은 이 페이지가 직접 만들어 넣고(데이터는 JSON 으로 복사), 창 자체 스크립트로 동작한다.
+   그래서 이 페이지를 다시 읽거나 닫아도 이미 열린 창은 그대로 쓸 수 있다.
+   감사 추적 창과 NG 이미지 창은 하나씩이며, 다른 배치를 열면 같은 창의 내용이 바뀐다.
+   창의 위치와 크기는 창을 닫을 때 기억해 두었다가 다음에 그 자리에 연다. */
+const G = {file: 0, n: 1, time: 2, ch: 3, type: 4, page: 5};
+function popGeom(kind) {
+  try { const g = JSON.parse(localStorage.getItem("auditpdf.popwin." + kind)); if (g && g.w > 300 && g.h > 200) return g; } catch (e) {}
+  // 처음 열 때 창끼리 겹치지 않게 종류마다 조금씩 비켜서
+  const n = {ng: 1, "pdf-batch": 2, "pdf-audit": 3, "pdf-bottle": 4, "pdf-ng": 5}[kind] || 0;
+  return {x: window.screenX + 80 + n * 60, y: window.screenY + 80 + n * 50,
+    w: Math.min(1200, screen.availWidth - 160), h: Math.min(850, screen.availHeight - 160)};
+}
+function openPopup(b, fi) {
+  const kind = files[fi][FILE.kind], g = popGeom(kind);
+  // 클릭 처리 안에서 바로 열어야 팝업 차단에 걸리지 않는다 (데이터는 그다음에 채운다)
+  const w = window.open("", "auditpdf-" + kind,
+    `popup=yes,width=${Math.round(g.w)},height=${Math.round(g.h)},left=${Math.round(g.x)},top=${Math.round(g.y)}`);
+  if (!w) {
+    alert("팝업 창이 차단되었습니다.\n브라우저 주소창 오른쪽의 팝업 차단 표시를 눌러 이 사이트(127.0.0.1)의 팝업을 허용해 주세요.");
+    return;
+  }
+  const f = files[fi];
+  const title = `${kind === "audit" ? "감사 추적" : "NG 이미지"} · ` +
+    [bMeta(b, "RECIPE NAME"), bMeta(b, "BATCH NUMBER") || b[B.folder]].filter(Boolean).join(" · ");
+  const rowsP = kind === "audit" ? Promise.resolve(audit.filter((r) => r[A.file] === fi))
+    : loadRows("ng").then(() => ngs.filter((r) => r[G.file] === fi));
+  if (!w.document.body || !w.document.body.dataset.ready) {
+    w.document.open();
+    w.document.write(`<!doctype html><meta charset="utf-8"><title>${esc(title)}</title><body style="font-family:sans-serif;padding:20px">불러오는 중…</body>`);
+    w.document.close();
+  }
+  rowsP.then((rows) => {
+    const payload = {kind, title, rows, live: !!DATA.live, origin: DATA.live ? new URL(document.baseURI).origin : "", file: f[FILE.name],
+      batch: fileMeta(f, "BATCH NUMBER"), recipe: fileMeta(f, "RECIPE NAME"), machine: fileMeta(f, "MACHINE ID")};
+    const css = [...document.querySelectorAll("style")].map((s) => s.textContent).join("\n");
+    const json = JSON.stringify(payload).replace(/</g, "\\u003c");
+    w.document.open();
+    w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${esc(title)}</title>` +
+      `<style>${popupFont(css + "\n" + POPUP_CSS)}</style></head><body data-ready="1">${POPUP_HTML}` +
+      `<script>const P = ${json};\n${POPUP_JS}<\/script></body></html>`);
+    w.document.close();
+    w.focus();
+  }).catch((e) => { try { w.document.body.textContent = "목록을 받지 못했습니다: " + e.message; } catch (err) {} });
+  w.focus();
+}
+
+/* 팝업 창은 글자를 화면보다 20% 작게: 스타일의 px 글자 크기만 줄이고 여백·배치는 그대로 둔다 */
+const POPUP_FONT = 0.8;
+const popupFont = (css) => css.replace(/(font-size:\s*|font:\s*)([\d.]+)px/g,
+  (m, k, n) => k + Math.round(n * POPUP_FONT * 10) / 10 + "px");
+const POPUP_CSS = `
+body { margin: 0; }
+.pw-head { position: sticky; top: 0; z-index: 5; background: var(--head); border-bottom: 1px solid var(--line); padding: 10px 18px; }
+.pw-head h1 { margin: 0; font-size: 18px; }
+.pw-tools { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-top: 8px; }
+.pw-tools label { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.pw-tools input[type=search] { width: 280px; }
+.pw-tools .summary { margin: 0 0 0 auto; gap: 8px; }
+.pw-tools .stat { padding: 3px 12px; min-width: 80px; }
+.pw-tools .stat b { font-size: 16px; }
+.pw-body { padding: 12px 18px; }
+.pw-body ul.details { margin: 4px 0 0; }
+th { cursor: pointer; }
+.stat.pick { font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.stat.pick:hover { border-color: var(--accent); }
+.stat.pick.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-soft); }
+/* 썸네일 크기 (슬라이더로 --thumb 를 바꾼다) */
+.gallery { grid-template-columns: repeat(auto-fill, minmax(var(--thumb, 170px), 1fr)); }
+.thumb-size { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.thumb-size input { width: 160px; }
+/* 이미지 불러오기 상태: 불러오는 중(돌아가는 표시) / 실패(눌러서 다시). 다 받기 전에는 깨진 그림 표시가 보이지 않게 숨긴다 */
+.card .pic { position: relative; }
+.card .pic img { opacity: 0; transition: opacity .15s; }
+.card .pic.ok img { opacity: 1; }
+.card .pic .st { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; padding: 6px; color: #8a939e; font-size: 13px; text-align: center; }
+.card .pic.ok .st { display: none; }
+.card .pic.err .st { color: #ff8a80; cursor: pointer; }
+.spin { width: 22px; height: 22px; border: 3px solid #3a424c; border-top-color: #5b9dff; border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.ng-status { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.ng-status .spin { width: 14px; height: 14px; border-width: 2px; }
+.ng-status.done { color: var(--ok); }
+.ng-status.bad { color: var(--alarm); }
+.ng-status button { font: inherit; padding: 1px 8px; }
+.zoomimg { position: relative; }
+.zoomimg .st { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; color: #8a939e; font-size: 14px; }
+/* 확대 창: 이 창 크기에 맞춰 최대로. 이미지 왼쪽, 정보 오른쪽 */
+#m-img { padding: 10px; }
+#m-img .sheet.wide { width: 100%; max-width: none; margin: 0; height: calc(100vh - 20px); display: flex; flex-direction: column; padding: 12px 16px; }
+#m-img .sheet-head { align-items: center; }
+#m-img .hbtns { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+#m-img .hbtns label { display: flex; align-items: center; gap: 5px; font-size: 14px; margin-right: 6px; }
+.zoom-wrap { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; margin-top: 10px; }
+.zoom-wrap .zoomimg { margin: 0; min-height: 0; align-items: center; }
+.zoom-wrap .zoomimg img { width: 100%; height: 100%; max-height: none; min-height: 0; object-fit: contain; }
+.zoomimg img.pixel { image-rendering: pixelated; }
+.zoom-wrap .kv { margin: 0; align-content: start; overflow: auto; grid-template-columns: 70px 1fr; }
+@media (max-width: 760px) { .zoom-wrap { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; } }
+`;
+const POPUP_HTML = `<div class="pw-head"><h1 id="pw-title"></h1><div class="pw-tools" id="pw-tools"></div></div>
+<div class="pw-body"><div id="pw-main"></div><div class="pager" id="pw-pager"></div></div>
+<div class="modal hidden" id="m-img"><div class="sheet wide">
+  <div class="sheet-head"><h2 id="img-title"></h2>
+    <div class="hbtns"><label title="늘린 이미지를 부드럽게 하지 않고 원본 픽셀을 그대로 크게 보여 줍니다"><input type="checkbox" id="img-pixel"> 원본 픽셀 그대로</label>
+      <button class="btn" id="img-prev">◀ 이전</button><button class="btn" id="img-next">다음 ▶</button><button class="btn" id="img-close">닫기</button></div></div>
+  <div class="zoom-wrap"><div class="zoomimg"><img id="img-big" alt=""><span class="st hidden" id="img-st"></span></div><dl class="kv" id="img-kv"></dl></div></div></div>`;
+
+// 별도 창 안에서 도는 스크립트. P = {kind, title, rows, live, origin, file, batch, recipe, machine}
+const POPUP_JS = String.raw`
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const fmtN = (n) => Number(n).toLocaleString("ko-KR");
+$("#pw-title").textContent = P.title;
+// 창 위치·크기 기억 (다음에 같은 자리에 연다)
+function saveGeom() {
+  try { localStorage.setItem("auditpdf.popwin." + P.kind, JSON.stringify({x: screenX, y: screenY, w: innerWidth, h: innerHeight})); } catch (e) {}
+}
+addEventListener("beforeunload", saveGeom);
+addEventListener("pagehide", saveGeom);
+let gt; addEventListener("resize", () => { clearTimeout(gt); gt = setTimeout(saveGeom, 300); });
+setInterval(saveGeom, 3000);   // 창을 옮기기만 할 때는 이벤트가 없어 주기적으로 저장
+
+function pager(total, page, size, go) {
+  const el = $("#pw-pager"), pages = Math.max(1, Math.ceil(total / size));
+  el.innerHTML = total > size
+    ? '<button class="btn" data-go="-1" ' + (page ? "" : "disabled") + '>이전</button><span>' +
+      fmtN(page * size + 1) + "–" + fmtN(Math.min(total, (page + 1) * size)) + " / " + fmtN(total) + " (" + (page + 1) + "/" + pages + '쪽)</span>' +
+      '<button class="btn" data-go="1" ' + (page + 1 < pages ? "" : "disabled") + '>다음</button>' : "";
+  el.querySelectorAll("[data-go]").forEach((b) => (b.onclick = () => { go(page + +b.dataset.go); scrollTo(0, 0); }));
+}
+
+if (P.kind === "audit") {
+  // 감사 추적 행: [파일, 시간, 로그, 사용자, 쪽, 행, 글자색, 상세[[시간, 글, 색]]]
+  const T = 1, L = 2, U = 3, PG = 4, COLOR = 6, DT = 7, PAGE = 200;
+  const COLS = [["시간", (r) => r[T]], ["로그", (r) => r[L]], ["사용자", (r) => r[U]], ["쪽", (r) => r[PG]]];
+  let rows = P.rows, page = 0, sortKey = null, sortDir = 1;
+  $("#pw-tools").innerHTML = '<label>검색 <input type="search" id="q" placeholder="로그 · 상세 · 사용자 · 시간"></label>' +
+    '<label><input type="checkbox" id="alarm"> 알람(강조) 행만</label><div class="summary" id="sum"></div>';
+  const filter = () => {
+    const q = $("#q").value.trim().toLowerCase(), alarm = $("#alarm").checked;
+    rows = P.rows.filter((r) => (!alarm || r[COLOR]) && (!q || r[L].toLowerCase().includes(q) || r[U].toLowerCase().includes(q) ||
+      r[T].includes(q) || r[DT].some((d) => d[1].toLowerCase().includes(q) || d[0].includes(q))));
+    page = 0; draw();
+  };
+  const draw = () => {
+    $("#sum").innerHTML = '<div class="stat"><b>' + fmtN(rows.length) + '</b><span>로그</span></div>' +
+      '<div class="stat alarm"><b>' + fmtN(rows.filter((r) => r[COLOR]).length) + '</b><span>알람(강조)</span></div>';
+    let list = rows;
+    if (sortKey !== null) {
+      const get = COLS[sortKey][1];
+      list = rows.slice().sort((a, b) => { const x = get(a), y = get(b);
+        return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "ko")) * sortDir; });
+    }
+    const shown = list.slice(page * PAGE, (page + 1) * PAGE);
+    $("#pw-main").innerHTML = '<div class="tablewrap"><table><thead><tr>' +
+      COLS.map((c, i) => '<th data-i="' + i + '" class="' + (i === 3 ? "num" : "") + '">' + c[0] +
+        (sortKey === i ? '<span class="dir">' + (sortDir > 0 ? "▲" : "▼") + "</span>" : "") + "</th>").join("") +
+      "</tr></thead><tbody>" + (shown.length ? shown.map((r) =>
+        '<tr class="' + (r[COLOR] ? "alarm" : "") + '"><td class="mono">' + esc(r[T]) + '</td><td class="wrap">' + esc(r[L]) +
+        (r[DT].length ? '<ul class="details">' + r[DT].map((d) => "<li>" + (d[0] !== r[T] ? '<span class="dt">' + esc(d[0].slice(11)) + "</span>" : "") +
+          esc(d[1]) + "</li>").join("") + "</ul>" : "") +
+        "</td><td>" + esc(r[U]) + '</td><td class="num">' + r[PG] + "</td></tr>").join("")
+        : '<tr><td colspan="4" class="empty">표시할 항목이 없습니다.</td></tr>') + "</tbody></table></div>";
+    $("#pw-main").querySelectorAll("th").forEach((th) => (th.onclick = () => {
+      const i = +th.dataset.i; sortDir = sortKey === i ? -sortDir : 1; sortKey = i; draw();
+    }));
+    pager(list.length, page, PAGE, (p) => { page = p; draw(); });
+  };
+  let t; $("#q").oninput = () => { clearTimeout(t); t = setTimeout(filter, 200); };
+  $("#alarm").onchange = filter;
+  draw();
+} else {
+  // NG 이미지 행: [파일, 이미지 번호, 시간, 채널, NG 유형, 쪽]
+  const NG_PAGE = 60;
+  let rows = P.rows, page = 0, at = -1;
+  const url = (r) => P.origin + "/img?f=" + r[0] + "&n=" + r[1];
+  const types = {};
+  P.rows.forEach((r) => r[4].split(/\s+/).filter(Boolean).forEach((t) => (types[t] = (types[t] || 0) + 1)));
+  // 유형 카드를 누르면 그 유형만, 'NG 이미지' 카드를 누르면 전체 ("장축 크기" 처럼 두 유형이 걸린 이미지는 양쪽에 다 나온다)
+  $("#pw-tools").innerHTML = '<div class="summary" style="margin:0">' +
+    '<button class="stat pick on" data-type="" title="전체 이미지 보기"><b>' + fmtN(P.rows.length) + '</b><span>NG 이미지</span></button>' +
+    Object.entries(types).sort((a, b) => b[1] - a[1]).map(([t, n]) =>
+      '<button class="stat alarm pick" data-type="' + esc(t) + '" title="' + esc(t) + ' 이미지만 보기"><b>' + fmtN(n) + "</b><span>" + esc(t) + "</span></button>").join("") +
+    "</div>" + (P.live ? "" : '<span class="note">이미지는 뷰어(python -m auditpdf serve)에서만 보입니다.</span>') +
+    '<label class="thumb-size">썸네일 크기<input type="range" id="thumb" min="120" max="480" step="10"><span id="thumb-v"></span></label>' +
+    '<span class="ng-status" id="ng-status"></span>';
+  // 썸네일 크기: 슬라이더 값(px)을 기억해 두고 다음에도 쓴다
+  const setThumb = (v) => {
+    document.documentElement.style.setProperty("--thumb", v + "px");
+    $("#thumb").value = v; $("#thumb-v").textContent = v + "px";
+    try { localStorage.setItem("auditpdf.ngthumb", v); } catch (e) {}
+  };
+  let thumb0 = 170;
+  try { thumb0 = +localStorage.getItem("auditpdf.ngthumb") || 170; } catch (e) {}
+  setThumb(thumb0);
+  $("#thumb").oninput = () => setThumb(+$("#thumb").value);
+  // 확대 창의 '원본 픽셀 그대로' (기억)
+  try { $("#img-pixel").checked = localStorage.getItem("auditpdf.ngpixel") === "1"; } catch (e) {}
+  const applyPixel = () => {
+    $("#img-big").classList.toggle("pixel", $("#img-pixel").checked);
+    try { localStorage.setItem("auditpdf.ngpixel", $("#img-pixel").checked ? "1" : "0"); } catch (e) {}
+  };
+  $("#img-pixel").onchange = applyPixel;
+  applyPixel();
+  document.querySelectorAll(".stat.pick").forEach((b) => (b.onclick = () => {
+    const t = b.dataset.type;
+    rows = t ? P.rows.filter((r) => r[4].split(/\s+/).includes(t)) : P.rows;
+    document.querySelectorAll(".stat.pick").forEach((x) => x.classList.toggle("on", x === b));
+    page = 0; draw(); scrollTo(0, 0);
+  }));
+  /* 이미지 불러오기: 서버는 한 PDF 에서 한 장씩 꺼내므로(큰 PDF 는 첫 장만 몇 초) 쪽마다 진행 상황을 보여 준다.
+     실패하면 잠시 뒤 한 번 더 받아 보고, 그래도 안 되면 '눌러서 다시' 로 둔다 (서버를 다시 켜는 중 등) */
+  const LOADING = '<span class="spin"></span>불러오는 중';
+  let gen = 0, stat = {ok: 0, err: 0, total: 0};
+  const showStatus = () => {
+    const el = $("#ng-status");
+    if (!P.live || !stat.total) { el.innerHTML = ""; el.className = "ng-status"; return; }
+    const doneN = stat.ok + stat.err;
+    if (doneN < stat.total) {
+      el.className = "ng-status";
+      el.innerHTML = '<span class="spin"></span>이미지 불러오는 중 ' + fmtN(doneN) + " / " + fmtN(stat.total);
+    } else if (stat.err) {
+      el.className = "ng-status bad";
+      el.innerHTML = "완료 " + fmtN(stat.ok) + "장 · 실패 " + fmtN(stat.err) + '장 <button class="btn" id="ng-retry">실패한 이미지 다시</button>';
+      $("#ng-retry").onclick = () => document.querySelectorAll(".card .pic.err").forEach((pic) => load(pic, gen, true));
+    } else {
+      el.className = "ng-status done";
+      el.textContent = "✓ 이 쪽 이미지 " + fmtN(stat.ok) + "장 모두 불러옴";
+    }
+  };
+  const load = (pic, g, manual) => {
+    const img = pic.querySelector("img"), st = pic.querySelector(".st");
+    if (pic.classList.contains("err")) { stat.err--; pic.classList.remove("err"); }
+    st.innerHTML = LOADING;
+    let tries = manual ? 1 : 0;
+    const ok = () => { if (g !== gen) return; pic.classList.add("ok"); stat.ok++; showStatus(); };
+    const fail = () => {
+      if (g !== gen) return;
+      if (tries++ < 1) { setTimeout(() => { if (g === gen) img.src = pic.dataset.src + "&retry=" + Date.now(); }, 1500); return; }
+      pic.classList.add("err");
+      st.innerHTML = "불러오기 실패<br>눌러서 다시";
+      stat.err++; showStatus();
+    };
+    img.onload = ok;
+    img.onerror = fail;
+    img.src = pic.dataset.src + (manual ? "&retry=" + Date.now() : "");
+    showStatus();
+  };
+  const draw = () => {
+    const start = page * NG_PAGE, shown = rows.slice(start, start + NG_PAGE);
+    gen++;
+    stat = {ok: 0, err: 0, total: P.live ? shown.length : 0};
+    $("#pw-main").innerHTML = '<div class="gallery">' + (shown.map((r, i) =>
+      '<button class="card" data-i="' + (start + i) + '"><div class="pic"' + (P.live ? ' data-src="' + url(r) + '"><img alt=""><span class="st"></span>' : ">이미지 없음") +
+      '</div><div class="cap"><b>' + esc(r[4] || "-") + "</b><span>" + esc(r[2]) + " · Ch " + esc(r[3]) + "</span></div></button>").join("") ||
+      '<p class="empty">표시할 항목이 없습니다.</p>') + "</div>";
+    $("#pw-main").querySelectorAll(".card").forEach((c) => (c.onclick = () => zoom(+c.dataset.i)));
+    if (P.live) $("#pw-main").querySelectorAll(".pic[data-src]").forEach((pic) => {
+      load(pic, gen, false);
+      pic.querySelector(".st").onclick = (e) => {   // 실패한 칸을 누르면 확대 대신 다시 받기
+        if (!pic.classList.contains("err")) return;
+        e.stopPropagation(); load(pic, gen, true);
+      };
+    });
+    showStatus();
+    pager(rows.length, page, NG_PAGE, (p) => { page = p; draw(); });
+  };
+  const zoom = (i) => {
+    if (i < 0 || i >= rows.length) return;
+    at = i;
+    const r = rows[i];
+    $("#img-title").textContent = (P.batch || "") + " · " + (i + 1) + " / " + rows.length;
+    $("#img-big").classList.toggle("hidden", !P.live);
+    if (P.live) {
+      const big = $("#img-big"), st = $("#img-st");
+      st.innerHTML = LOADING; st.classList.remove("hidden"); big.style.visibility = "hidden";
+      big.onload = () => { st.classList.add("hidden"); big.style.visibility = ""; };
+      big.onerror = () => { st.textContent = "이미지를 불러오지 못했습니다. (서버가 켜져 있는지 확인)"; };
+      big.src = url(r);
+    }
+    $("#img-prev").disabled = i === 0;
+    $("#img-next").disabled = i === rows.length - 1;
+    $("#img-kv").innerHTML = [["시간", r[2]], ["채널", "Ch " + r[3]], ["NG 유형", r[4]], ["배치", P.batch], ["레시피", P.recipe],
+      ["장비", P.machine], ["위치", r[5] + "쪽"], ["파일", P.file]].map(([k, v]) => "<dt>" + esc(k) + "</dt><dd>" + esc(v) + "</dd>").join("");
+    $("#m-img").classList.remove("hidden");
+  };
+  const close = () => $("#m-img").classList.add("hidden");
+  $("#img-prev").onclick = () => zoom(at - 1);
+  $("#img-next").onclick = () => zoom(at + 1);
+  $("#img-close").onclick = close;
+  $("#m-img").onclick = (e) => { if (e.target.id === "m-img") close(); };
+  addEventListener("keydown", (e) => {
+    if ($("#m-img").classList.contains("hidden")) return;
+    if (e.key === "ArrowLeft") zoom(at - 1);
+    if (e.key === "ArrowRight") zoom(at + 1);
+    if (e.key === "Escape") close();
+  });
+  draw();
+}
+`;
+
+/* ---------- 폴더 설정 (serve) ---------- */
+async function post(url, body) {
+  const res = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})});
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || res.statusText);
+  return json;
+}
+function openRoot() {
+  const s = DATA.settings || {};
+  $("#root-input").value = s.root || "";
+  $("#cfg-path").textContent = s.config || "";
+  $("#root-msg").textContent = "";
+  $("#recent").innerHTML = (s.recent || []).map((p) => `<button class="btn" data-p="${esc(p)}">${esc(p)}</button>`).join("");
+  $("#recent").querySelectorAll("button").forEach((b) => (b.onclick = () => ($("#root-input").value = b.dataset.p)));
+  $("#m-root").classList.remove("hidden");
+  $("#root-input").focus();
+}
+$("#btn-root").onclick = openRoot;
+$("#root-browse").onclick = async () => {
+  const msg = $("#root-msg");
+  msg.className = "msg"; msg.textContent = "이 PC 에 열린 폴더 선택 창에서 고르세요…";
+  try {
+    const r = await post("/api/browse", {initial: $("#root-input").value});
+    if (r.root) $("#root-input").value = r.root;
+    msg.textContent = "";
+  } catch (e) { msg.className = "msg err"; msg.textContent = e.message; }
+};
+$("#root-apply").onclick = async () => {
+  const msg = $("#root-msg");
+  msg.className = "msg"; msg.textContent = "확인 중…";
+  try { await post("/api/root", {root: $("#root-input").value}); location.href = "/"; }
+  catch (e) { msg.className = "msg err"; msg.textContent = e.message; }
+};
+$("#root-input").onkeydown = (e) => { if (e.key === "Enter") $("#root-apply").click(); };
+$("#btn-xlsx").onclick = () => {
+  const perFolder = confirm("폴더(배치)별로 시트를 나눌까요?\n\n확인: 폴더별 시트 · 취소: 한 시트로 통합");
+  location.href = "/api/export.xlsx?per_folder=" + (perFolder ? 1 : 0);
+};
+document.querySelectorAll("[data-close]").forEach((b) => (b.onclick = () => b.closest(".modal").classList.add("hidden")));
+document.querySelectorAll(".modal").forEach((m) => (m.onclick = (e) => { if (e.target === m) m.classList.add("hidden"); }));
+document.addEventListener("keydown", (e) => {   // Esc: 맨 위의 창 하나만 닫는다 (팝업 위의 이미지 확대 등)
+  if (e.key !== "Escape") return;
+  const open = [...document.querySelectorAll(".modal:not(.hidden)")];
+  if (open.length) open[open.length - 1].classList.add("hidden");
+});
+
+/* 배치 탭: ↑/↓ 로 선택 행 이동 (쪽 끝에서는 앞/뒤 쪽으로 넘어간다). 화면 스크롤 대신 행이 움직인다.
+   선택 표시는 바로 바꾸고, 그래프 등 오른쪽 내용은 키를 누르고 있는 동안 잠깐 미뤄 한 번만 그린다 */
+let batchKeyTimer;
+document.addEventListener("keydown", (e) => {
+  if (tab !== "batch" || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
+  if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  if (e.target.closest("input, select, textarea, [contenteditable]") || document.querySelector(".modal:not(.hidden)")) return;
+  const list = bRows._sorted || bRows;
+  if (!list.length) return;
+  e.preventDefault();
+  const cur = list.indexOf(selBatch);
+  const next = cur < 0 ? bPage * PAGE : Math.max(0, Math.min(list.length - 1, cur + (e.key === "ArrowDown" ? 1 : -1)));
+  if (next === cur) return;
+  selBatch = list[next];
+  markBatch(selBatch);
+  $("#t-batch").querySelector(`tbody tr[data-r="${next}"]`)?.scrollIntoView({block: "nearest"});
+  clearTimeout(batchKeyTimer);
+  const b = selBatch;
+  batchKeyTimer = setTimeout(() => { if (selBatch === b) selectBatch(b); }, e.repeat ? 150 : 0);
+});
+
+/* ---------- 읽는 중 (serve) ---------- */
+async function poll() {
+  try {
+    const s = await (await fetch("/api/status", {cache: "no-store"})).json();
+    if (!s.running) return location.replace("/");
+    $("#job-fill").style.width = s.total ? (100 * s.done / s.total).toFixed(1) + "%" : "0";
+    $("#job-count").textContent = s.total ? `${fmtN(s.done)} / ${fmtN(s.total)} 파일` : "PDF 를 찾는 중…";
+    $("#job-name").textContent = s.name || "";
+  } catch (e) { $("#job-count").textContent = "서버에 연결할 수 없습니다."; }
+  setTimeout(poll, 500);
+}
+$("#job-cancel").onclick = async () => { await post("/api/cancel"); location.replace("/"); };
+
+/* ---------- 시작 ---------- */
+if (DATA.job) {
+  $("#job").classList.remove("hidden");
+  $("#job-root").textContent = DATA.source;
+  document.querySelectorAll("#hbtns .btn:not(#btn-root)").forEach((b) => b.classList.add("hidden"));
+  $("#tabs").classList.add("hidden");
+  showTab("audit");
+  poll();
+} else {
+  filterAudit();
+  drawFiles();
+  drawBatch();
+  let saved = "audit";
+  try { saved = sessionStorage.getItem("auditpdf.tab") || "audit"; } catch (e) {}
+  showTab(TABS.includes(saved) ? saved : "audit");
+  $("#btn-xlsx").disabled = !files.length;
+  if (DATA.live && !DATA.source && !DATA.error) openRoot();
+}
+</script>
+</body>
+</html>
