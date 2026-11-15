@@ -1384,7 +1384,7 @@ async function poll() {
     const s = await (await fetch("/api/status", {cache: "no-store"})).json();
     if (!s.running) return location.replace("/");
     $("#job-fill").style.width = s.total ? (100 * s.done / s.total).toFixed(1) + "%" : "0";
-    $("#job-count").textContent = s.total ? `${fmtN(s.done)} / ${fmtN(s.total)} 파일` : "PDF 를 찾는 중…";
+    $("#job-count").textContent = s.total ? `${fmtN(s.done)} / ${fmtN(s.total)} 파일` : `PDF 를 찾는 중… ${s.done ? fmtN(s.done) + "개" : ""}`;
     $("#job-name").textContent = s.name || "";
   } catch (e) { $("#job-count").textContent = "서버에 연결할 수 없습니다."; }
   setTimeout(poll, 500);

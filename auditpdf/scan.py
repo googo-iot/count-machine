@@ -12,6 +12,7 @@ import datetime
 import gc
 import hashlib
 import json
+import os
 import re
 import threading
 from dataclasses import dataclass, field
@@ -91,9 +92,38 @@ def kind_of(name):
     return next(kind for key, (kind, _) in KINDS.items() if key.lower() == word)
 
 
+def walk_pdfs(root, found=None, cancel=None):
+    """root 아래 리포트 PDF 의 [(Path, stat)].
+
+    os.scandir 로 폴더를 한 번만 훑는다. Windows 에서는 폴더 목록에 크기·수정 시각이 함께 오므로
+    파일마다 stat 을 따로 묻지 않는다 (네트워크 공유에서 파일마다 왕복하면 수천 건에 몇 분이 걸린다).
+    found(n) 은 폴더 하나를 훑을 때마다 지금까지 찾은 개수로 부른다. cancel 이 set 되면 멈춘다.
+    """
+    out, stack = [], [str(root)]
+    while stack:
+        if cancel is not None and cancel.is_set():
+            raise Cancelled()
+        try:
+            with os.scandir(stack.pop()) as it:
+                entries = list(it)
+        except OSError:
+            continue  # 권한 없는 폴더 등은 rglob 처럼 건너뛴다
+        for e in entries:
+            try:
+                if e.is_dir(follow_symlinks=False):
+                    stack.append(e.path)
+                elif e.name.lower().endswith(".pdf") and kind_of(e.name) and e.is_file():
+                    out.append((Path(e.path), e.stat()))
+            except OSError:
+                continue
+        if found:
+            found(len(out))
+    out.sort(key=lambda ps: (str(ps[0].parent).lower(), ps[0].name.lower()))
+    return out
+
+
 def find_pdfs(root):
-    return sorted((p for p in Path(root).rglob("*.pdf") if kind_of(p.name) and p.is_file()),
-                  key=lambda p: (str(p.parent).lower(), p.name.lower()))
+    return [p for p, _ in walk_pdfs(root)]
 
 
 def rel_folder(path, root):
@@ -171,15 +201,15 @@ def scan(root, progress=None, cancel=None):
     progress(done, total, name) 는 파일을 시작할 때마다 부른다. cancel 이 set 되면 다음 파일에서 멈춘다.
     """
     root = Path(root).resolve()
-    pdfs = find_pdfs(root)
+    # 찾는 동안에는 total=0, done=찾은 개수, name="" 로 알린다
+    pdfs = walk_pdfs(root, (lambda n: progress(n, 0, "")) if progress else None, cancel)
     result = Scan(root)
-    for seq, path in enumerate(pdfs, start=1):
+    for seq, (path, stat) in enumerate(pdfs, start=1):
         if cancel is not None and cancel.is_set():
             raise Cancelled()
         if progress:
             progress(seq - 1, len(pdfs), path.name)
         kind = kind_of(path.name)
-        stat = path.stat()
         try:
             pdf, digest = _read_cached(path, stat, kind)
             status = "OK" if pdf.items else "내용 없음"
