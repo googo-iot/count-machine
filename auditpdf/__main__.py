@@ -2,7 +2,7 @@
 
 리포트: AuditTrailLog(감사 추적), Batch(배치 리포트), BottleCountLog(병 계수 기록), NGImageALL(NG 이미지)
 
-    python -m auditpdf serve    [--root DIR] [--port 8766]   로컬 뷰어 (폴더는 화면에서 고를 수 있다)
+    python -m auditpdf serve    [--root DIR] [--port 8766] [--host 0.0.0.0]   뷰어 (장비·접속 허용 IP 는 화면에서)
     python -m auditpdf report   [--root DIR] [-o audit_report.html]
     python -m auditpdf export   [--root DIR] [-o audit_trail_merged.xlsx] [--sheet-per-folder] [--csv-also]
     python -m auditpdf diagnose [--root DIR] [--csv 진단결과.csv]
@@ -154,6 +154,8 @@ def main(argv=None):
         s.add_argument("--root", help="Audit Trail 리뷰 루트 폴더 (기본: 뷰어에서 설정한 폴더)")
         if name == "serve":
             s.add_argument("--port", type=int, default=8766)
+            s.add_argument("--host", help="접속을 받을 주소. 0.0.0.0 이면 내부망의 허용 IP PC 도 접속 "
+                                          "(기본: 화면의 '접속 허용 IP'에서 '다른 PC 접속 허용'을 켰으면 0.0.0.0, 아니면 127.0.0.1)")
             s.add_argument("--no-open", action="store_true", help="브라우저로 열지 않음")
         elif name == "diagnose":
             s.add_argument("--csv", help="진단 결과 CSV 경로")

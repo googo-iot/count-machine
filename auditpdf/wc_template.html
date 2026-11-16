@@ -1,0 +1,1102 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>중량선별기</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --text: #1d232b; --muted: #66707c; --line: #dfe3e8;
+  --accent: #1f6feb; --accent-soft: #e7f0ff; --alarm: #b42318; --alarm-soft: #fdecea; --row-alt: #fafbfc;
+  --overlay: rgba(10, 14, 20, .72); --head: #e3eaf4; --ok: #1a7f37; --warn: #9a6700; --warn-soft: #fff8e1;
+  --g-pass: #1f6feb; --g-under: #d97706; --g-over: #b42318; --g-double: #f5c400; --limit: #66707c;
+  --axis-bg: #e8edf4; --lim-hi: #d1242f; --lim-lo: #0550ae; --change: #d1242f;
+  --seg-hl: rgba(250, 204, 21, .26); --seg-hl-row: #fdf3c4;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12161b; --panel: #1a2027; --text: #e4e8ed; --muted: #95a0ad; --line: #2c343e;
+    --accent: #5b9dff; --accent-soft: #1c2c45; --alarm: #ff8a80; --alarm-soft: #3a1f1f; --row-alt: #1d242c;
+    --head: #28323e; --ok: #56d364; --warn: #e3b341; --warn-soft: #3a3020;
+    --g-pass: #5b9dff; --g-under: #f0a548; --g-over: #ff8a80; --g-double: #ffd60a; --limit: #95a0ad;
+    --axis-bg: #232c36; --lim-hi: #ff7b72; --lim-lo: #79c0ff; --change: #ff7b72;
+    --seg-hl: rgba(250, 204, 21, .13); --seg-hl-row: #3a3418;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.45 "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif; }
+header { padding: 16px 20px 0; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: end; justify-content: space-between; }
+h1 { margin: 0; font-size: 22px; display: flex; align-items: center; gap: 10px; }
+.badge { font-size: 13px; font-weight: 600; color: var(--warn); background: var(--warn-soft); border: 1px solid var(--warn);
+  border-radius: 999px; padding: 1px 10px; }
+.meta { color: var(--muted); font-size: 14px; margin-top: 2px; word-break: break-all; }
+.devices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.devices .btn { padding: 4px 12px; font-size: 15px; }
+.devices .add { color: var(--muted); border-style: dashed; }
+.hbtns { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 6px;
+  padding: 6px 12px; font: inherit; cursor: pointer; text-decoration: none; display: inline-block; }
+.btn:hover { border-color: var(--accent); }
+.btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.danger { color: var(--alarm); }
+.btn:disabled { opacity: .55; cursor: default; }
+/* 카테고리 탭 (계수기 / 중량선별기) - 운영 화면 */
+.cats { display: flex; gap: 4px; margin-bottom: 6px; font-size: 14px; }
+.cats a { padding: 2px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); text-decoration: none; }
+.cats a.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.cats a[href]:hover { border-color: var(--accent); color: var(--text); }
+.viewer-note { align-self: center; color: var(--muted); font-size: 14px; }
+.devices .stage { font-size: 11px; font-weight: 600; color: var(--ok); border: 1px solid var(--ok); border-radius: 999px; padding: 0 6px; margin-left: 6px; vertical-align: 1px; }
+.check { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 15px; color: var(--text); }
+.notice { margin: 12px 20px 0; padding: 8px 14px; border-radius: 8px; background: var(--warn-soft); border: 1px solid var(--warn);
+  font-size: 14px; }
+.banner { margin: 12px 20px 0; padding: 10px 14px; border-radius: 8px; background: var(--alarm-soft); color: var(--alarm); }
+nav { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 14px; border-bottom: 1px solid var(--line); padding: 0 20px; }
+nav button { border: 0; background: none; color: var(--muted); padding: 10px 14px; font: inherit; cursor: pointer;
+  border-bottom: 2px solid transparent; }
+nav button.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+nav .count { font-size: 13px; margin-left: 4px; font-weight: 400; color: var(--muted); }
+main { padding: 16px 20px 40px; }
+.filters { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.filters label { display: flex; flex-direction: column; gap: 3px; font-size: 14px; color: var(--muted); }
+input, select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 8px; min-width: 0; }
+input[type=search] { width: 240px; }
+.summary { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 10px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; min-width: 120px; }
+.stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 14px; }
+.stat.alarm b { color: var(--alarm); }
+.tablewrap { overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; max-height: 62vh; }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+th { position: sticky; top: 0; background: var(--head); font-weight: 600; font-size: 14px; z-index: 1; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tbody tr:nth-child(even) td { background: var(--row-alt); }
+tbody tr.sel td { background: var(--accent-soft); }
+tbody tr.click { cursor: pointer; }
+tbody tr.click:hover td { background: var(--accent-soft); }
+tr.alarm td { color: var(--alarm); }
+td.ng { color: var(--alarm); font-weight: 600; }
+.note { color: var(--muted); font-size: 14px; }
+.pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin: 8px 0; font-size: 14px; color: var(--muted); }
+.pager:empty { display: none; }
+.hidden { display: none !important; }
+.detail { margin-top: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+.detail h2 { margin: 0 0 4px; font-size: 18px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 14px; color: var(--muted); margin: 8px 0; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+.legend i.line { border-radius: 0; height: 2px; width: 16px; vertical-align: 3px; }
+.legend i.dash { border-radius: 0; height: 0; width: 18px; vertical-align: 3px; border-top: 2px dashed; background: none !important; }
+.legend i.dbl { width: 9px; height: 9px; border-radius: 0; border: 2px solid var(--g-double); background: none;
+  outline: 1px solid rgba(20, 24, 30, .7);
+  transform: rotate(45deg); margin: 0 7px 0 3px; vertical-align: 0; }
+.legend i.vline { border-radius: 0; width: 2px; height: 14px; vertical-align: -2px; }
+.chart .tip .hi { color: var(--lim-hi); } .chart .tip .lo { color: var(--lim-lo); } .chart .tip .ps { color: var(--ok); }
+.chart .tip .chg { color: var(--change); }
+.chart { position: relative; user-select: none; }
+.chart canvas { display: block; width: 100%; cursor: grab; touch-action: none; }
+.chart canvas.drag { cursor: grabbing; }
+/* 구간 측정: 점 두 개를 눌러 그 사이 시간 간격 */
+.chart .measure { position: absolute; top: 30px; right: 22px; background: var(--panel); border: 1px solid var(--accent);
+  border-radius: 8px; padding: 8px 12px; font-size: 14px; line-height: 1.6; box-shadow: 0 4px 14px rgba(0,0,0,.12);
+  font-variant-numeric: tabular-nums; max-width: 360px; }
+.chart .measure .k { color: var(--muted); display: inline-block; min-width: 64px; }
+.chart .measure .big { font-size: 18px; font-weight: 700; color: var(--accent); }
+.chart .measure .head { display: flex; justify-content: space-between; gap: 12px; align-items: center; font-weight: 600; margin-bottom: 2px; }
+.chart .measure .btn { padding: 1px 8px; font-size: 12px; }
+.chart .tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 7px 10px; font-size: 13px; line-height: 1.55; box-shadow: 0 4px 14px rgba(0, 0, 0, .18); white-space: nowrap; z-index: 2;
+  font-variant-numeric: tabular-nums; }
+.chart .tip b { font-size: 15px; }
+.chart .tip .k { color: var(--muted); display: inline-block; min-width: 76px; }
+.hover { min-height: 1.5em; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums;
+  display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-top: 4px; }
+.hover .btn { padding: 2px 10px; font-size: 13px; }
+.hover .yset { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; color: var(--text); }
+.hover .yset input { width: 92px; padding: 2px 6px; font-size: 13px; }
+.hover .ymsg { color: var(--alarm); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 15px; margin: 8px 0 0; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; word-break: break-all; }
+h3 { margin: 18px 0 8px; font-size: 16px; }
+.modal { position: fixed; inset: 0; background: var(--overlay); display: flex; align-items: flex-start; justify-content: center;
+  padding: 24px 16px; overflow-y: auto; z-index: 10; }
+.sheet { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; width: min(760px, 100%); padding: 18px 20px 22px; margin-top: 8vh; }
+.sheet-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+.sheet h2 { margin: 0; font-size: 20px; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); margin-top: 10px; }
+.frow { display: flex; gap: 8px; align-items: center; }
+.frow input { flex: 1; }
+.frow.end { margin-top: 14px; justify-content: flex-end; }
+.frow.end .grow { margin-right: auto; }
+.msg { min-height: 1.4em; margin: 10px 0 0; font-size: 15px; }
+.msg.err { color: var(--alarm); }
+.loading { padding: 40px; text-align: center; color: var(--muted); }
+td.gbtn { padding: 3px 8px; }
+td.gbtn .btn { padding: 2px 10px; font-size: 14px; }
+/* 그래프 창 (/lab/run): 그래프 하나만 창 가득 */
+body.runmode > header, body.runmode > .notice, body.runmode > nav, body.runmode > main { display: none; }
+#run-view { padding: 14px 18px 10px; }
+#run-view h2 { margin: 0; font-size: 19px; }
+#run-view .summary { margin: 10px 0 4px; }
+/* 검사 탭: 합계 칸은 필터 줄 오른쪽에 */
+.summary.in-filters { margin: 0 0 0 auto; }
+.summary.in-filters .stat { padding: 4px 12px; min-width: 96px; }
+.summary.in-filters .stat b { font-size: 17px; }
+.summary.in-filters .stat span { font-size: 13px; }
+#tab-runs .filters + .note, #tab-history .filters + .note { margin-top: 10px; }
+#run-view .stat { padding: 6px 12px; min-width: 78px; }
+#run-view .summary { gap: 8px; }
+#run-view .stat b { font-size: 17px; }
+#run-view .summary { align-items: center; }
+#run-view .audit-btn { margin-left: auto; align-self: stretch; padding: 6px 16px; font-weight: 600; }
+#run-view .audit-btn .count { font-weight: 400; color: var(--muted); margin-left: 4px; }
+.audit-view .tablewrap { margin-top: 8px; max-height: none; }
+.audit-opts { gap: 16px; margin-top: 8px; font-size: 14px; color: var(--muted); }
+.audit-opts label { display: flex; gap: 6px; align-items: center; }
+tr.outside td { color: var(--muted); }
+td.phase { white-space: nowrap; font-size: 13px; }
+td.phase.during { color: var(--accent); font-weight: 600; }
+/* 검사 내용 표: 기준 구간(기준 변경)마다 한 줄 */
+.seg-table { width: auto; min-width: 0; margin: 2px 0 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  border-collapse: separate; border-spacing: 0; overflow: hidden; font-size: 14px; }
+.seg-table th { position: static; padding: 4px 12px; font-size: 13px; }
+.seg-table td { padding: 4px 12px; font-variant-numeric: tabular-nums; }
+.seg-table tr:last-child td { border-bottom: 0; }
+.seg-table td.ng { color: var(--alarm); font-weight: 600; }
+.seg-table td.lim, .seg-table td.no { font-weight: 600; }
+.seg-table tbody tr { cursor: pointer; }
+.seg-table tbody tr:hover td { background: var(--accent-soft); }
+.seg-table tbody tr.on td { background: var(--seg-hl-row); }
+@media (max-width: 640px) {
+  header, main { padding-left: 16px; padding-right: 16px; } nav { padding: 0 16px; } .notice, .banner { margin: 12px 16px 0; }
+  input[type=search] { width: 100%; } .filters label { flex: 1 1 140px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="cats hidden" id="cats"><a href="/">계수기</a><a class="on">중량선별기</a></div>
+    <h1>중량선별기 <span class="badge" id="badge">테스트</span></h1>
+    <div class="devices" id="devices"></div>
+    <div class="meta" id="meta"></div>
+  </div>
+  <div class="hbtns">
+    <span class="viewer-note hidden" id="viewer-note">보기 전용</span>
+    <button class="btn" id="btn-dev">장비 설정</button>
+    <a class="btn hidden" id="btn-lab" href="/lab" title="장비 추가·변경과 운영 표시는 테스트 페이지에서 (이 PC 에서만)">장비 설정 (테스트 페이지)</a>
+    <button class="btn" id="btn-reload">다시 읽기</button>
+    <a class="btn" id="btn-back" href="/">← 계수기 리포트 (운영)</a>
+    <a class="btn" id="btn-live" href="/wc">중량선별기 운영 화면 →</a>
+  </div>
+</header>
+<div class="notice" id="notice">테스트 페이지입니다. 이 PC(서버)에서만 열립니다. '운영 화면에 표시'를 켠 장비만 운영 화면(/wc)과 다른 PC 에 보입니다.</div>
+<div class="banner hidden" id="banner"></div>
+<nav id="tabs">
+  <button data-tab="runs" class="on">검사 (런)<span class="count" id="n-runs"></span></button>
+  <button data-tab="history">이력<span class="count" id="n-history"></span></button>
+  <button data-tab="stats">통계<span class="count" id="n-stats"></span></button>
+  <button data-tab="files">파일<span class="count" id="n-files"></span></button>
+</nav>
+<main>
+  <div class="loading" id="loading">불러오는 중…</div>
+
+  <section id="tab-runs" class="hidden">
+    <div class="filters">
+      <label>시작일<input type="date" id="r-from"></label>
+      <label>종료일<input type="date" id="r-to"></label>
+      <label>검색<input type="search" id="r-q" placeholder="품명 · Lot · 품목번호"></label>
+      <button class="btn" id="r-reset">초기화</button>
+      <div class="summary in-filters" id="r-summary"></div>
+    </div>
+    <div class="note" style="margin-bottom:6px">런 = 검사 기록 파일 하나 (날짜-품목번호). 평균·표준편차는 Pass/Under/Over 행의 중량. '그래프' 를 누르면 그 런의 중량 추이를 새 창으로 엽니다 (런마다 따로).</div>
+    <div class="pager" id="r-pager"></div>
+    <div class="tablewrap"><table id="t-runs"><thead><tr>
+      <th>그래프</th><th>날짜</th><th>시작</th><th>종료</th><th class="num" title="첫 계량 ~ 마지막 계량 (중간에 멈춘 시간 포함)">작업시간</th><th class="num">품목</th><th>품명</th><th>Lot</th>
+      <th class="num">계량</th><th class="num">Pass</th><th class="num">Under</th><th class="num">Over</th><th class="num">Double</th>
+      <th class="num">불량률 %</th><th class="num">평균</th><th class="num">표준편차</th><th class="num">최소</th><th class="num">최대</th>
+      <th class="num">기준 변경</th><th>시작 기준 (Under / Pass / Over)</th>
+    </tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section id="tab-history" class="hidden">
+    <div class="filters">
+      <label>시작일<input type="date" id="h-from"></label>
+      <label>종료일<input type="date" id="h-to"></label>
+      <label>유형<select id="h-type"><option value="">전체</option></select></label>
+      <label>이벤트<select id="h-event"><option value="">전체</option></select></label>
+      <label>사용자<select id="h-user"><option value="">전체</option></select></label>
+      <label>검색<input type="search" id="h-q" placeholder="이벤트 · 상세 · 값"></label>
+      <button class="btn" id="h-reset">초기화</button>
+      <div class="summary in-filters" id="h-summary"></div>
+    </div>
+    <div class="note" style="margin-bottom:6px">※ 표시: 변경 전/후 값에 쉼표가 들어 있어 나눈 위치를 추정한 행 (원본 CSV 에 따옴표가 없음).</div>
+    <div class="pager" id="h-pager"></div>
+    <div class="tablewrap"><table id="t-history"><thead><tr>
+      <th>날짜</th><th>시간</th><th>사용자</th><th>이벤트</th><th>상세</th><th>변경 전</th><th>변경 후</th><th>유형</th><th>파일</th>
+    </tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section id="tab-stats" class="hidden">
+    <div class="note" style="margin-bottom:8px">Data\Others 의 통계 파일. 한 파일에 한 줄이며 머리글이 없어 6번째 열부터는 의미를 아직 확인하지 못했습니다 (열 번호로 표시).</div>
+    <div class="tablewrap"><table id="t-stats"><thead></thead><tbody></tbody></table></div>
+  </section>
+
+  <section id="tab-files" class="hidden">
+    <h3 style="margin-top:0">장비 정보 (Header)</h3>
+    <dl class="kv" id="f-header"></dl>
+    <h3>파일</h3>
+    <div class="tablewrap"><table id="t-files"><thead><tr>
+      <th>종류</th><th>경로</th><th class="num">크기</th><th>수정 시각</th><th class="num">행</th><th>상태</th>
+    </tr></thead><tbody></tbody></table></div>
+    <h3>알람 백업 (DataBackup)</h3>
+    <div class="tablewrap"><table id="t-alarms"><thead><tr><th>날짜</th><th>시간</th><th>Raw Data</th><th>알람</th><th>파일</th></tr></thead><tbody></tbody></table></div>
+  </section>
+</main>
+
+<div class="modal hidden" id="m-dev">
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="dev-title">장비 설정</h2><button class="btn" data-close>닫기</button></div>
+    <div class="field">장비 이름<div class="frow"><input id="dev-name" spellcheck="false" placeholder="예: [WCM-P001]중량선별기"></div></div>
+    <div class="field">데이터 폴더 (Data, Header 등이 들어 있는 폴더)
+      <div class="frow"><input id="dev-root" spellcheck="false" placeholder="예: C:\#Inbox\WC"><button class="btn" id="dev-browse">찾아보기…</button></div></div>
+    <label class="check"><input type="checkbox" id="dev-live"> 운영 화면에 표시 <span class="note">(켜면 운영 화면 /wc 와 허용된 다른 PC 에서 보기 전용으로 보입니다)</span></label>
+    <div class="msg" id="dev-msg"></div>
+    <div class="frow end"><button class="btn danger grow" id="dev-delete">장비 삭제</button><button class="btn primary" id="dev-apply">적용</button></div>
+  </div>
+</div>
+
+<script>
+const SET = /*__SET__*/null || {devices: [], device: -1};
+const PAGE = 200;
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const fmtN = (n) => n == null ? "" : Number(n).toLocaleString("ko-KR");
+const fmtF = (n, d) => n == null ? "" : Number(n).toFixed(d);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const dq = "d=" + SET.device;
+const BASE = SET.base || "/lab", LIVE = !!SET.live;   // 운영 화면(/wc)이면 LIVE: 보기 전용, 장비 관리는 테스트 페이지에서
+let D = null, tab = "runs";
+
+async function post(url, body) {
+  const res = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})});
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || res.statusText);
+  return json;
+}
+function banner(text) { const b = $("#banner"); b.textContent = text; b.classList.toggle("hidden", !text); }
+
+/* ---------- 장비 ---------- */
+const devs = SET.devices || [];
+$("#devices").innerHTML = devs.map((d, i) =>
+  `<a class="btn${i === SET.device ? " on" : ""}" href="${BASE}?d=${i}"${d.root ? ` title="${esc(d.root)}"` : ""}>${esc(d.name)}` +
+  `${!LIVE && d.stage === "live" ? '<span class="stage" title="운영 화면에 보이는 장비">운영</span>' : ""}</a>`).join("") +
+  (LIVE ? "" : '<button class="btn add" id="dev-add">+ 장비 추가</button>');
+document.title = (SET.device >= 0 ? devs[SET.device].name + " · " : "") + (LIVE ? "중량선별기" : "중량선별기 (테스트)");
+if (LIVE) {   // 운영 화면: 테스트 표시를 빼고, 장비 관리 · 다시 읽기는 서버 PC(관리자)만
+  ["#badge", "#notice", "#btn-dev", "#btn-back", "#btn-live"].forEach((s) => $(s).classList.add("hidden"));
+  $("#cats").classList.remove("hidden");
+  $("#btn-lab").classList.toggle("hidden", !SET.admin);
+  $("#btn-reload").classList.toggle("hidden", !SET.admin);
+  $("#viewer-note").classList.toggle("hidden", !!SET.admin);
+} else $("#btn-live").classList.toggle("hidden", !devs.some((d) => d.stage === "live"));
+let editing = null;
+function openDev(add) {
+  editing = add || SET.device < 0 ? null : SET.device;
+  const d = editing === null ? null : devs[editing];
+  $("#dev-title").textContent = d ? "장비 설정" : "장비 추가";
+  $("#dev-name").value = d ? d.name : "";
+  $("#dev-root").value = d ? d.root : "";
+  $("#dev-delete").classList.toggle("hidden", !d);
+  $("#dev-live").checked = !!d && d.stage === "live";
+  $("#dev-msg").textContent = "";
+  $("#m-dev").classList.remove("hidden");
+  $(d ? "#dev-root" : "#dev-name").focus();
+}
+if (!LIVE) $("#dev-add").onclick = () => openDev(true);
+$("#btn-dev").onclick = () => openDev(false);
+$("#dev-browse").onclick = async () => {
+  const msg = $("#dev-msg");
+  msg.className = "msg"; msg.textContent = "이 PC 에 열린 폴더 선택 창에서 고르세요…";
+  try { const r = await post("/api/browse", {initial: $("#dev-root").value}); if (r.root) $("#dev-root").value = r.root; msg.textContent = ""; }
+  catch (e) { msg.className = "msg err"; msg.textContent = e.message; }
+};
+$("#dev-apply").onclick = async () => {
+  const msg = $("#dev-msg"), body = {name: $("#dev-name").value, root: $("#dev-root").value, live: $("#dev-live").checked};
+  if (editing !== null) body.index = editing;
+  msg.className = "msg"; msg.textContent = "확인 중…";
+  try { const r = await post("/lab/api/device", body); location.href = "/lab?d=" + r.index; }
+  catch (e) { msg.className = "msg err"; msg.textContent = e.message; }
+};
+$("#dev-delete").onclick = async () => {
+  const d = devs[editing];
+  if (!d || !confirm(`테스트 장비 '${d.name}' 를 목록에서 지울까요?\n(데이터 파일은 지우지 않습니다.)`)) return;
+  try { const r = await post("/lab/api/device", {index: editing, delete: true}); location.href = r.index >= 0 ? "/lab?d=" + r.index : "/lab"; }
+  catch (e) { $("#dev-msg").className = "msg err"; $("#dev-msg").textContent = e.message; }
+};
+$("#dev-name").onkeydown = (e) => { if (e.key === "Enter") $("#dev-root").focus(); };
+$("#dev-root").onkeydown = (e) => { if (e.key === "Enter") $("#dev-apply").click(); };
+document.querySelectorAll("[data-close]").forEach((b) => (b.onclick = () => b.closest(".modal").classList.add("hidden")));
+document.querySelectorAll(".modal").forEach((m) => (m.onclick = (e) => { if (e.target === m) m.classList.add("hidden"); }));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") document.querySelectorAll(".modal").forEach((m) => m.classList.add("hidden")); });
+$("#btn-reload").onclick = () => load(true);
+
+/* ---------- 탭 ---------- */
+document.querySelectorAll("#tabs button").forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
+function showTab(t) {
+  tab = t;
+  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
+  ["runs", "history", "stats", "files"].forEach((x) => $("#tab-" + x).classList.toggle("hidden", !D || x !== t));
+  try { sessionStorage.setItem("wc.tab", t); } catch (e) {}
+}
+
+/* ---------- 쪽 나누기 ---------- */
+function pager(el, total, page, go) {
+  const pages = Math.max(1, Math.ceil(total / PAGE));
+  el.innerHTML = total > PAGE
+    ? `<button class="btn" ${page ? "" : "disabled"} data-p="${page - 1}">이전</button>` +
+      `<span>${fmtN(page * PAGE + 1)}–${fmtN(Math.min(total, (page + 1) * PAGE))} / ${fmtN(total)} (${page + 1}/${pages}쪽)</span>` +
+      `<button class="btn" ${page < pages - 1 ? "" : "disabled"} data-p="${page + 1}">다음</button>` : "";
+  el.querySelectorAll("button").forEach((b) => (b.onclick = () => go(+b.dataset.p)));
+}
+const inRange = (date, from, to) => (!from || date >= from) && (!to || date <= to);
+
+/* ---------- 검사 (런) ---------- */
+// runs 행: [파일, 날짜, 시작, 종료, 품목번호, 품명, Lot, 계량, Pass, Under, Over, Double, 기타, 불량률, 평균, SD, 최소, 최대, 기준 변경, [Under, Pass, Over]]
+const R = {file: 0, date: 1, start: 2, end: 3, pno: 4, name: 5, lot: 6, n: 7, pass: 8, under: 9, over: 10, dbl: 11, other: 12,
+           ng: 13, mean: 14, sd: 15, min: 16, max: 17, changes: 18, limits: 19, first: 20};
+const fmtLim = (l) => (l || []).map((v) => fmtF(v, 1)).join(" / ");
+let rRows = [], rPage = 0, rSel = null;
+function filterRuns() {
+  const from = $("#r-from").value, to = $("#r-to").value, q = $("#r-q").value.trim().toLowerCase();
+  rRows = D.runs.filter((r) => inRange(r[R.date], from, to) &&
+    (!q || [r[R.name], r[R.lot], r[R.pno]].join(" ").toLowerCase().includes(q))).reverse();   // 최근 런이 위로
+  rPage = 0;
+  const n = rRows.reduce((s, r) => s + r[R.n], 0), ng = rRows.reduce((s, r) => s + r[R.under] + r[R.over] + r[R.dbl], 0);
+  $("#r-summary").innerHTML =
+    `<div class="stat"><b>${fmtN(rRows.length)}</b><span>런</span></div>` +
+    `<div class="stat"><b>${fmtN(n)}</b><span>계량</span></div>` +
+    `<div class="stat alarm"><b>${fmtN(ng)}</b><span>불량 (Under+Over+Double)</span></div>` +
+    `<div class="stat"><b>${n ? fmtF(100 * ng / n, 2) : "0"}%</b><span>불량률</span></div>`;
+  drawRuns();
+}
+function drawRuns() {
+  const rows = rRows.slice(rPage * PAGE, (rPage + 1) * PAGE);
+  $("#t-runs tbody").innerHTML = rows.map((r, i) =>
+    `<tr class="click${r === rSel ? " sel" : ""}" data-i="${rPage * PAGE + i}">` +
+    `<td class="gbtn"><button class="btn" data-g="${rPage * PAGE + i}" title="중량 추이 그래프 (새 창)">그래프</button></td><td>${esc(r[R.date])}</td><td>${esc(r[R.start])}</td><td>${esc(r[R.end])}</td><td class="num">${workTime(r)}</td>` +
+    `<td class="num">${esc(r[R.pno])}</td><td>${esc(r[R.name])}</td><td>${esc(r[R.lot])}</td>` +
+    `<td class="num">${fmtN(r[R.n])}</td><td class="num">${fmtN(r[R.pass])}</td>` +
+    `<td class="num${r[R.under] ? " ng" : ""}">${fmtN(r[R.under])}</td><td class="num${r[R.over] ? " ng" : ""}">${fmtN(r[R.over])}</td>` +
+    `<td class="num${r[R.dbl] ? " ng" : ""}">${fmtN(r[R.dbl])}</td><td class="num">${fmtF(r[R.ng], 2)}</td>` +
+    `<td class="num">${fmtF(r[R.mean], 3)}</td><td class="num">${fmtF(r[R.sd], 3)}</td><td class="num">${fmtF(r[R.min], 1)}</td><td class="num">${fmtF(r[R.max], 1)}</td>` +
+    `<td class="num">${r[R.changes] || ""}</td><td>${fmtLim(r[R.first] && r[R.first].length ? r[R.first] : r[R.limits])}</td></tr>`).join("")
+    || '<tr><td colspan="20" class="note">조건에 맞는 런이 없습니다.</td></tr>';
+  $("#t-runs tbody").querySelectorAll("tr[data-i]").forEach((tr) => (tr.onclick = () => { rSel = rRows[+tr.dataset.i]; markRun(); }));
+  $("#t-runs tbody").querySelectorAll("[data-g]").forEach((b) => (b.onclick = (e) => {
+    e.stopPropagation();
+    rSel = rRows[+b.dataset.g]; markRun();
+    openRunWindow(rSel);
+  }));
+  pager($("#r-pager"), rRows.length, rPage, (p) => { rPage = p; drawRuns(); });
+}
+["#r-from", "#r-to"].forEach((s) => ($(s).onchange = filterRuns));
+let rq; $("#r-q").oninput = () => { clearTimeout(rq); rq = setTimeout(filterRuns, 200); };
+$("#r-reset").onclick = () => { $("#r-from").value = $("#r-to").value = $("#r-q").value = ""; filterRuns(); };
+
+function markRun() {
+  $("#t-runs tbody").querySelectorAll("tr[data-i]").forEach((tr) => tr.classList.toggle("sel", rRows[+tr.dataset.i] === rSel));
+}
+/* 그래프 창: 런마다 따로 연다 (창 이름에 장비·파일 번호). 같은 런을 다시 누르면 그 창을 앞으로.
+   창 크기·위치는 마지막에 쓴 것을 기억해 다음 창에 쓴다 */
+function runGeom() {
+  let g = null;
+  try { g = JSON.parse(localStorage.getItem("wc.runwin")); } catch (e) {}
+  return g && g.w > 300 && g.h > 200 ? g : {w: Math.min(1200, screen.availWidth - 80), h: Math.min(720, screen.availHeight - 80),
+    x: (screen.availLeft || 0) + 40, y: (screen.availTop || 0) + 40};
+}
+function openRunWindow(r) {
+  const g = runGeom();
+  const w = window.open(`${BASE}/run?${dq}&f=${r[R.file]}`, `wc-run-${SET.device}-${r[R.file]}`,
+    `popup=yes,width=${Math.round(g.w)},height=${Math.round(g.h)},left=${Math.round(g.x)},top=${Math.round(g.y)}`);
+  if (!w) { alert("팝업 창이 차단되었습니다.\n브라우저 주소창 오른쪽의 팝업 차단 표시를 눌러 이 사이트(127.0.0.1)의 팝업을 허용해 주세요."); return; }
+  w.focus();
+}
+/* 작업시간 = 마지막 계량 - 첫 계량 (자정을 넘기면 다음 날로). H:MM:SS */
+function workTime(r) { return spanTime(r[R.start], r[R.end]); }
+function spanTime(a, b) {
+  const sec = (t) => { const [h, m, s] = String(t).split(":").map(Number); return h * 3600 + m * 60 + (s || 0); };
+  if (!a || !b) return "";
+  let d = sec(b) - sec(a);
+  if (isNaN(d)) return "";
+  if (d < 0) d += 86400;
+  return `${Math.floor(d / 3600)}:${String(Math.floor(d / 60) % 60).padStart(2, "0")}:${String(d % 60).padStart(2, "0")}`;
+}
+/* 기준 구간: Under/Pass/Over 가 같은 연속 행 묶음 [{i0, i1, u, p, o}]. 2번째 구간부터 시작점이 기준 변경 */
+function limitSegments(rows) {
+  const segs = [];
+  rows.forEach((r, i) => {
+    const s = segs[segs.length - 1];
+    if (s && s.u === r[3] && s.p === r[4] && s.o === r[5]) s.i1 = i;
+    else segs.push({i0: i, i1: i, u: r[3], p: r[4], o: r[5]});
+  });
+  return segs;
+}
+/* 검사 내용 표: 기준 구간마다 시간 순으로 [No., 검사기준, 계량, 계량 비율(전체 계량 대비), Pass, Under, Over, Double, 불량률, 평균].
+   평균은 위쪽 요약과 같게 Pass/Under/Over 행의 중량, 불량률은 (Under+Over+Double) / 계량 */
+function segTable(segs, rows) {
+  const body = segs.map((sg, no) => {
+    const c = {Pass: 0, Under: 0, Over: 0, Double: 0};
+    let sum = 0, k = 0;
+    for (let i = sg.i0; i <= sg.i1; i++) {
+      const r = rows[i];
+      if (r[2] in c) c[r[2]]++;
+      if (r[1] != null && (r[2] === "Pass" || r[2] === "Under" || r[2] === "Over")) { sum += r[1]; k++; }
+    }
+    const n = sg.i1 - sg.i0 + 1, ng = c.Under + c.Over + c.Double;
+    const num = (v) => `<td class="num${v ? " ng" : ""}">${fmtN(v)}</td>`;
+    // 구간 작업시간: 이 구간 첫 계량 ~ 다음 구간 첫 계량 (마지막 구간은 자기 마지막 계량까지). 구간들을 더하면 런 작업시간
+    const tEnd = no + 1 < segs.length ? rows[segs[no + 1].i0][0] : rows[sg.i1][0];
+    return `<tr data-k="${no}" title="순번 ${fmtN(sg.i0 + 1)} – ${fmtN(sg.i1 + 1)} · ${esc(rows[sg.i0][0])} – ${esc(rows[sg.i1][0])}` +
+      ` · 누르면 그래프에서 이 구간의 바탕을 칠합니다 (다시 누르면 원래대로)">` +
+      `<td class="num no">${no + 1}</td><td class="lim">${fmtLim([sg.u, sg.p, sg.o])}</td>` +
+      `<td class="num">${spanTime(rows[sg.i0][0], tEnd)}</td><td class="num">${fmtN(n)}</td>` +
+      `<td class="num">${fmtF(100 * n / Math.max(1, rows.length), 1)}</td><td class="num">${fmtN(c.Pass)}</td>` +
+      num(c.Under) + num(c.Over) + num(c.Double) +
+      `<td class="num${ng ? " ng" : ""}">${fmtF(100 * ng / n, 2)}</td><td class="num">${k ? fmtF(sum / k, 3) : ""}</td></tr>`;
+  }).join("");
+  return '<table class="seg-table"><thead><tr><th class="num">No.</th><th>검사기준 (U / P / O)</th>' +
+    '<th class="num" title="이 구간 첫 계량 ~ 다음 구간 첫 계량 (마지막 구간은 마지막 계량까지). 다 더하면 런 작업시간">작업시간</th><th class="num">계량</th>' +
+    '<th class="num" title="이 구간의 계량 ÷ 전체 계량">계량 비율(%)</th><th class="num">Pass</th>' +
+    '<th class="num">Under</th><th class="num">Over</th><th class="num">Double</th><th class="num">불량률(%)</th><th class="num">평균(g)</th>' +
+    `</tr></thead><tbody>${body}</tbody></table>`;
+}
+/* 중량 추이 그래프 (산점도). x 측정 시각(초 단위), y 중량. 점은 판정 색, 선은 그때의 기준 (기준이 바뀌면 계단).
+   마우스 휠: 그래프 안·X축 바탕 → X(시간) 확대·축소 (최대 10초 폭), Y축 바탕 → Y(중량) 확대·축소 (커서 위치 중심)
+   드래그: 그래프 안·X축 → 시간 앞뒤로, Y축 → 중량 위아래로 · 더블클릭: 전체 시간 · 점에 커서: 그 계량의 정보
+   기준선: 상한(Over) 빨간 점선, Pass 초록 실선, 하한(Under) 파란 점선. 기준 변경 시점은 빨간 세로 실선.
+   기준선·변경선에 커서: 그 구간의 기준값 / 변경 전후 값 */
+function weightChart(box, info, rows, date) {
+  // 행: [시각, 중량, 판정, Under, Pass, Over, Tare]
+  const n = rows.length, cv = box.querySelector("canvas"), tip = box.querySelector(".tip");
+  const segs = limitSegments(rows);
+  let hoverLine = null;   // {type: "limit", k, col} 또는 {type: "change", k}
+  const marked = new Set();   // 바탕을 칠할 기준 구간 번호 (검사 내용 표의 행)
+  const ys = rows.map((r) => r[1]);
+  // y 범위 기본값: 최대 = 상한(Over) + 그 값의 5%, 최소 = 하한(Under) - 그 값의 5% (음수여도 바깥쪽으로 넓힌다).
+  // 기준이 바뀐 런이면 가장 높은 상한 · 가장 낮은 하한으로. 기준값이 없으면 최대 · 최소 중량으로.
+  // 범위 밖의 점은 위 · 아래 끝에 붙여 그린다. 화면 아래 'Y 최소 / Y 최대' 로 직접 정할 수 있다. 가로로 확대·이동해도 y 는 그대로
+  let wMin = Infinity, wMax = -Infinity;
+  for (const v of ys) if (v != null) { if (v < wMin) wMin = v; if (v > wMax) wMax = v; }
+  if (wMin === Infinity) { wMin = 0; wMax = 1; }
+  const ovs = segs.map((sg) => sg.o).filter((v) => v != null && isFinite(v)), uns = segs.map((sg) => sg.u).filter((v) => v != null && isFinite(v));
+  const yTop = ovs.length ? Math.max(...ovs) : wMax, yBot = uns.length ? Math.min(...uns) : wMin;
+  const defLo = yBot - Math.abs(yBot) * 0.05, defHi0 = yTop + Math.abs(yTop) * 0.05;
+  const defHi = defHi0 > defLo ? defHi0 : defLo + 1;   // 값이 모두 0 인 경우 등
+  let lo = defLo, hi = defHi;
+  const m = {l: 56, r: 14, t: 26, b: 34};   // 위쪽 여백에 Y축 이름 "중량(g)"
+  // X축 = 측정 시각 (초). ts[i] = 첫 계량부터 지난 초 (자정을 넘기면 이어서 센다). 같은 초에 여러 개면 세로로 겹친다
+  const sod = (t) => { const [h, mi, se] = String(t).split(":").map(Number); return h * 3600 + mi * 60 + (se || 0); };
+  const base = n ? sod(rows[0][0]) : 0, ts = new Array(n);
+  for (let i = 0, day = 0, prev = base; i < n; i++) {
+    let v = sod(rows[i][0]);
+    if (isNaN(v)) v = prev;
+    if (v < prev - 43200) day += 86400;   // 자정 넘김
+    ts[i] = v + day - base; prev = v;
+  }
+  const clock = (t) => { const v = ((Math.round(base + t) % 86400) + 86400) % 86400;
+    return `${String(Math.floor(v / 3600)).padStart(2, "0")}:${String(Math.floor(v / 60) % 60).padStart(2, "0")}:${String(v % 60).padStart(2, "0")}`; };
+  // ts >= t 인 첫 행 번호
+  const lower = (t) => { let l = 0, h = n; while (l < h) { const md = (l + h) >> 1; if (ts[md] < t) l = md + 1; else h = md; } return l; };
+  const segStart = (k) => (k ? ts[segs[k].i0] : ts[0] || 0);           // 기준 구간 k 의 시작 시각 (기준이 바뀐 뒤 첫 계량)
+  const segEnd = (k) => (k + 1 < segs.length ? segStart(k + 1) : ts[n - 1] || 0);
+  const full = Math.max(1, n ? ts[n - 1] : 1), minSpan = Math.min(full, 10);   // 가장 크게 확대하면 10초
+  let W = 0, H = 0, a = 0, b = full, hoverI = -1, drag = null, frame = 0;
+  let pick = [];   // 구간 측정으로 고른 점 (행 번호, 최대 2개, 누른 순서)
+  const mbox = box.querySelector(".measure");
+  const pw = () => W - m.l - m.r;
+  const X = (t) => m.l + (t - a) / (b - a) * pw(), I = (x) => a + (x - m.l) / pw() * (b - a);
+  const Y = (v) => H - m.b - (v - lo) / (hi - lo) * (H - m.t - m.b);
+  const Yc = (v) => Math.max(m.t, Math.min(H - m.b, Y(v)));   // 범위 밖의 점은 위·아래 끝에
+  const color = {Pass: css("--g-pass"), Under: css("--g-under"), Over: css("--g-over"), Double: css("--g-double")};
+  const fix = () => {
+    let span = Math.max(minSpan, Math.min(full, b - a));
+    if (a < 0) a = 0;
+    b = a + span;
+    if (b > full) { b = full; a = b - span; }
+    if (a < 0) a = 0;
+  };
+  const schedule = () => { if (!frame) frame = requestAnimationFrame(() => { frame = 0; draw(); }); };
+  const ph = () => H - m.t - m.b;
+  const V = (y) => lo + (H - m.b - y) / ph() * (hi - lo);      // 화면 y → 중량
+  // 커서가 있는 곳: "y" Y축 바탕, "x" X축 바탕, "plot" 그래프 안, null 그 밖 (왼쪽 아래 모서리 등)
+  const region = (mx, my) => {
+    if (mx < m.l && my >= m.t && my <= H - m.b) return "y";
+    if (my > H - m.b && mx >= m.l && mx <= W - m.r) return "x";
+    if (mx >= m.l && mx <= W - m.r && my >= m.t && my <= H - m.b) return "plot";
+    return null;
+  };
+
+  function draw() {
+    const dpr = devicePixelRatio || 1, g = cv.getContext("2d");
+    g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+    g.fillStyle = css("--axis-bg");   // 축 바탕: 이 안에서 휠을 굴리면 그 축만 확대·축소
+    g.fillRect(0, m.t, m.l - 2, ph());
+    g.fillRect(m.l, H - m.b + 2, pw(), m.b - 2);
+    const muted = css("--muted");
+    g.font = "12px Malgun Gothic, sans-serif"; g.fillStyle = muted; g.strokeStyle = css("--line"); g.lineWidth = 1;
+    // Y 눈금: 0.1 단위 (소수 한 자리). 계산은 0.1 을 1 로 놓은 정수로 해 소수 오차를 없앤다.
+    // 글자 눈금은 24px 안팎 간격 (충분히 확대하면 0.1 마다), 0.1 보조선은 0.1 간격이 6px 이상일 때만
+    const T0 = Math.ceil(lo * 10 - 1e-9), T1 = Math.floor(hi * 10 + 1e-9);
+    const stepT = Math.max(1, Math.round(niceStep((hi - lo) * 24 / ph()) * 10));
+    if (ph() / ((hi - lo) * 10) >= 6) {
+      g.save(); g.globalAlpha = 0.45;
+      for (let t = T0; t <= T1; t++) if (t % stepT) { g.beginPath(); g.moveTo(m.l, Y(t / 10)); g.lineTo(W - m.r, Y(t / 10)); g.stroke(); }
+      g.restore();
+    }
+    g.textAlign = "right";
+    for (let t = Math.ceil(T0 / stepT) * stepT; t <= T1; t += stepT) {
+      g.beginPath(); g.moveTo(m.l, Y(t / 10)); g.lineTo(W - m.r, Y(t / 10)); g.stroke();
+      g.fillText((t / 10).toFixed(1), m.l - 6, Y(t / 10) + 4);
+    }
+    // X 눈금: 시각 (시:분:초). 간격은 1·2·5·10·15·30초, 1·2·5·10·15·30분, 1·2·3·6·12시간 중 하나.
+    // 보는 구간의 끝 시각은 늘 오른쪽 끝에 굵게 (가까운 일반 눈금은 겹치지 않게 뺀다)
+    const xl = W - m.r, xs_ = timeStep((b - a) / Math.max(2, Math.floor(pw() / 90)));
+    g.textAlign = "center";
+    for (let t = Math.ceil((base + a) / xs_ - 1e-9) * xs_ - base; t <= b + 1e-9; t += xs_) {
+      const x = X(t);
+      g.beginPath(); g.moveTo(x, H - m.b); g.lineTo(x, H - m.b + 4); g.stroke();
+      if (xl - x >= 70) g.fillText(clock(t), x, H - m.b + 16);
+    }
+    g.fillStyle = css("--text"); g.font = "600 12px Malgun Gothic, sans-serif";
+    g.textAlign = "right"; g.fillText(clock(Math.floor(b + 1e-9)), xl, H - m.b + 16);
+    g.font = "12px Malgun Gothic, sans-serif"; g.fillStyle = muted;
+    g.textAlign = "right"; g.fillText("시간", W - m.r, H - 4);
+    g.textAlign = "left"; g.fillText("중량(g)", 4, m.t - 9);      // Y축 끝 (X축 끝의 "순번" 과 같은 방식)
+    g.save(); g.beginPath(); g.rect(m.l, m.t - 4, pw(), H - m.t - m.b + 8); g.clip();
+    const i0 = Math.max(0, lower(a) - 1), i1 = Math.min(n - 1, lower(b + 1e-9) + 1);
+    // 검사 내용 표에서 고른 기준 구간: 바탕을 칠한다 (점·선보다 먼저)
+    if (marked.size) {
+      g.fillStyle = css("--seg-hl");
+      for (const k of marked) {
+        const sg = segs[k];
+        if (sg) { const xa = X(segStart(k)), xb = Math.max(xa + 4, X(segEnd(k))); g.fillRect(xa, m.t, xb - xa, ph()); }
+      }
+    }
+    // 점을 먼저 그리고 기준선을 위에 (선이 점에 가려지지 않게)
+    const per = pw() / Math.max(1, i1 - i0);                // 보이는 점 하나에 돌아가는 가로 픽셀
+    const rp = Math.max(1.6, Math.min(4, per * 0.35));
+    for (const grade of ["Pass", "Under", "Over", "Double"]) {   // 불량 점이 위에 오도록 나중에
+      g.fillStyle = g.strokeStyle = color[grade];
+      for (let i = i0; i <= i1; i++) {
+        if (rows[i][2] !== grade || ys[i] == null) continue;
+        const x = X(ts[i]), y = Yc(ys[i]);
+        if (grade === "Double") {   // Double(겹침): 속이 빈 마름모 - 중량이 아니라 간격으로 판정해 다른 점과 구분
+          const d = rp + 3.5;   // 노란색은 밝은 배경에서 흐려 어두운 테두리를 먼저 두른다
+          g.beginPath(); g.moveTo(x, y - d); g.lineTo(x + d, y); g.lineTo(x, y + d); g.lineTo(x - d, y); g.closePath();
+          g.strokeStyle = "rgba(20, 24, 30, .7)"; g.lineWidth = 3.8; g.stroke();
+          g.strokeStyle = color.Double; g.lineWidth = 2; g.stroke();
+        } else {
+          g.beginPath(); g.arc(x, y, grade === "Pass" ? rp : rp + 1, 0, 7); g.fill();
+        }
+      }
+    }
+    // 기준선: 구간마다 가로선, 구간이 바뀌는 곳(기준 변경)은 빨간 세로 실선. 구간 값은 선 위에 글자로
+    const LINES = [["o", css("--lim-hi"), [6, 4]], ["p", css("--ok"), []], ["u", css("--lim-lo"), [6, 4]]];
+    const bg = css("--bg");
+    segs.forEach((sg, k) => {
+      const xa = X(segStart(k)), xb = Math.max(xa + 1, X(segEnd(k)));
+      if (xb < m.l || xa > W - m.r) return;
+      for (const [col, c, dash] of LINES) {
+        if (sg[col] == null) continue;
+        const on = hoverLine && hoverLine.type === "limit" && hoverLine.k === k && hoverLine.col === col;
+        g.strokeStyle = c; g.lineWidth = on ? 3.5 : 1.8; g.setLineDash(dash);
+        g.beginPath(); g.moveTo(xa, Y(sg[col])); g.lineTo(xb, Y(sg[col])); g.stroke();
+      }
+      g.setLineDash([]);
+      if (Math.min(xb, W - m.r) - Math.max(xa, m.l) >= 46) {   // 구간이 충분히 넓으면 값을 적는다
+        g.font = "12px Malgun Gothic, sans-serif"; g.textAlign = "left"; g.lineWidth = 3; g.strokeStyle = bg;
+        const tx = Math.max(xa, m.l) + 5;
+        for (const [col, c] of LINES) {
+          if (sg[col] == null) continue;
+          g.fillStyle = c; g.strokeText(fmtF(sg[col], 1), tx, Y(sg[col]) - 5); g.fillText(fmtF(sg[col], 1), tx, Y(sg[col]) - 5);
+        }
+      }
+    });
+    segs.forEach((sg, k) => {
+      if (!k) return;
+      const x = X(segStart(k));
+      if (x < m.l || x > W - m.r) return;
+      const on = hoverLine && hoverLine.type === "change" && hoverLine.k === k;
+      g.strokeStyle = css("--change"); g.lineWidth = on ? 3.5 : 2;
+      g.beginPath(); g.moveTo(x, m.t); g.lineTo(x, H - m.b); g.stroke();
+    });
+    // 구간 측정: 두 점 사이 바탕, 각 점에 세로 점선과 A / B 표시
+    if (pick.length) {
+      const acc = css("--accent"), xs = pick.map((i) => X(ts[i]));
+      if (pick.length === 2) {
+        g.save(); g.globalAlpha = 0.12; g.fillStyle = acc;
+        g.fillRect(Math.min(...xs), m.t, Math.max(2, Math.abs(xs[1] - xs[0])), ph()); g.restore();
+      }
+      g.strokeStyle = acc; g.lineWidth = 1.5; g.setLineDash([4, 3]);
+      xs.forEach((x) => { g.beginPath(); g.moveTo(x, m.t); g.lineTo(x, H - m.b); g.stroke(); });
+      g.setLineDash([]); g.lineWidth = 2.5;
+      pick.forEach((i, k) => {
+        g.beginPath(); g.arc(xs[k], Yc(ys[i]), rp + 5, 0, 7); g.stroke();
+        g.font = "700 13px Malgun Gothic, sans-serif"; g.fillStyle = acc; g.textAlign = "center";
+        g.lineWidth = 4; g.strokeStyle = css("--bg"); g.strokeText(k ? "B" : "A", xs[k], m.t + 14);
+        g.fillText(k ? "B" : "A", xs[k], m.t + 14); g.strokeStyle = acc; g.lineWidth = 2.5;
+      });
+    }
+    if (hoverI >= 0 && ts[hoverI] >= a - 1 && ts[hoverI] <= b + 1) {
+      g.strokeStyle = css("--text"); g.lineWidth = 2;
+      g.beginPath(); g.arc(X(ts[hoverI]), Yc(ys[hoverI]), rp + 4, 0, 7); g.stroke();
+    }
+    g.restore();
+    info.querySelector(".range").textContent =
+      `보는 구간: ${clock(Math.ceil(a - 1e-9))} – ${clock(Math.floor(b + 1e-9))}` +
+      ((k0, k1) => (k1 > k0 ? ` · 순번 ${fmtN(k0 + 1)} – ${fmtN(k1)} / ${fmtN(n)}` : ` · 이 시간에 계량 없음 (전체 ${fmtN(n)})`))(lower(a - 1e-9), lower(b + 1e-9 + 1)) +
+      (b - a < full ? ` (×${(full / (b - a)).toFixed(1)})` : "");
+  }
+
+  function nearest(mx, my) {
+    const dt = 14 / pw() * (b - a), j0 = lower(I(mx) - dt), j1 = Math.min(n - 1, lower(I(mx) + dt + 1e-9), j0 + 6000);
+    let best = -1, bd = 14 * 14;
+    for (let i = j0; i <= j1; i++) {
+      if (ys[i] == null) continue;
+      const dx = X(ts[i]) - mx, dy = Yc(ys[i]) - my, d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = i; }
+    }
+    return [best, Math.sqrt(bd)];
+  }
+  /* 커서 근처의 기준 변경선(세로) 또는 기준선(가로) */
+  function nearLine(mx, my) {
+    for (let k = 1; k < segs.length; k++) if (Math.abs(X(segStart(k)) - mx) <= 4) return {type: "change", k};
+    const c = I(mx), k = segs.findIndex((sg, j) => c >= segStart(j) && (c < segEnd(j) || (j === segs.length - 1 && c <= segEnd(j))));
+    if (k < 0) return null;
+    let best = null, bd = 5;
+    for (const col of ["o", "p", "u"]) {
+      const v = segs[k][col];
+      if (v == null) continue;
+      const d = Math.abs(Y(v) - my);
+      if (d <= bd) { bd = d; best = {type: "limit", k, col}; }
+    }
+    return best;
+  }
+  function placeTip(html, mx, my) {
+    tip.innerHTML = html;
+    tip.classList.remove("hidden");
+    const bw = box.clientWidth, tw = tip.offsetWidth, th = tip.offsetHeight;
+    tip.style.left = (mx + 14 + tw > bw ? mx - 14 - tw : mx + 14) + "px";
+    tip.style.top = Math.max(0, Math.min(H - th, my - th / 2)) + "px";
+  }
+  const span = (sg) => `${fmtN(sg.i0 + 1)} – ${fmtN(sg.i1 + 1)}`;
+  function lineTip(L, mx, my) {
+    const sg = segs[L.k], v = (x) => fmtF(x, 1);
+    if (L.type === "change") {
+      const pv = segs[L.k - 1], arrow = (col) => pv[col] === sg[col] ? `${v(sg[col])} (변경 없음)` : `${v(pv[col])} → <b>${v(sg[col])}</b>`;
+      placeTip(`<div><b class="chg">기준 변경 ${L.k} / ${segs.length - 1}</b></div>` +
+        `<div><span class="k">순번</span>${fmtN(sg.i0 + 1)}</div>` +
+        `<div><span class="k">시각</span>${esc(date)} ${esc(rows[sg.i0][0])}</div>` +
+        `<div><span class="k hi">상한 Over</span>${arrow("o")}</div>` +
+        `<div><span class="k ps">Pass</span>${arrow("p")}</div>` +
+        `<div><span class="k lo">하한 Under</span>${arrow("u")}</div>`, mx, my);
+    } else {
+      placeTip(`<div><b>기준</b> ${segs.length > 1 ? `구간 ${L.k + 1} / ${segs.length}` : ""}</div>` +
+        `<div><span class="k hi">상한 Over</span><b${L.col === "o" ? "" : ' style="font-weight:400"'}>${v(sg.o)}</b></div>` +
+        `<div><span class="k ps">Pass</span><b${L.col === "p" ? "" : ' style="font-weight:400"'}>${v(sg.p)}</b></div>` +
+        `<div><span class="k lo">하한 Under</span><b${L.col === "u" ? "" : ' style="font-weight:400"'}>${v(sg.u)}</b></div>` +
+        `<div><span class="k">순번</span>${span(sg)}</div>` +
+        `<div><span class="k">시각</span>${esc(rows[sg.i0][0])} – ${esc(rows[sg.i1][0])}</div>`, mx, my);
+    }
+  }
+  function showTip(i, mx, my) {
+    if (i < 0) { tip.classList.add("hidden"); return; }
+    const r = rows[i];
+    tip.innerHTML =
+      `<div><span class="k">순번</span><b>${fmtN(i + 1)}</b> / ${fmtN(n)}</div>` +
+      `<div><span class="k">측정 시간</span>${esc(date)} ${esc(r[0])}</div>` +
+      `<div><span class="k">중량</span><b>${esc(r[1])}</b></div>` +
+      `<div><span class="k">판정</span>${r[2] === "Double" ? '<span class="legend" style="display:inline;margin:0"><i class="dbl"></i></span>' : ""}` +
+      `<b style="color:${r[2] === "Double" ? "inherit" : color[r[2]] || "inherit"}">${esc(r[2])}</b>` +
+      `${r[2] === "Double" ? ' <span class="k" style="min-width:0">(겹침 · 간격으로 판정)</span>' : ""}</div>` +
+      `<div><span class="k">기준</span>Under ${esc(r[3])} · Pass ${esc(r[4])} · Over ${esc(r[5])}</div>` +
+      `<div><span class="k">Tare</span>${fmtF(r[6], 1)}</div>`;
+    tip.classList.remove("hidden");
+    const bw = box.clientWidth, tw = tip.offsetWidth, th = tip.offsetHeight;
+    tip.style.left = (mx + 14 + tw > bw ? mx - 14 - tw : mx + 14) + "px";
+    tip.style.top = Math.max(0, Math.min(H - th, my - th / 2)) + "px";
+  }
+  const sameLine = (p, q) => (p && q ? p.type === q.type && p.k === q.k && p.col === q.col : p === q);
+  const pos = (e) => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+
+  cv.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const [mx, my] = pos(e), where = region(mx, my);
+    if (!where) return;
+    const f = Math.exp(Math.max(-1, Math.min(1, e.deltaY / 300)) * 0.9);   // 아래로: 축소, 위로: 확대
+    if (where === "y") {
+      const c = V(my), span = Math.max(1e-3, Math.min(1e6, (hi - lo) * f));
+      lo = c - (c - lo) / (hi - lo) * span; hi = lo + span;
+      showY();
+    } else {
+      const c = Math.max(a, Math.min(b, I(mx))), span = Math.max(minSpan, Math.min(full, (b - a) * f));
+      a = c - (c - a) / (b - a) * span; b = a + span; fix();
+    }
+    hoverI = -1; tip.classList.add("hidden"); schedule();
+  }, {passive: false});
+  const CURSOR = {y: "ns-resize", x: "ew-resize", plot: "", null: "default"};
+  cv.addEventListener("pointerdown", (e) => {
+    const [mx, my] = pos(e), where = region(mx, my);
+    if (e.button !== 0 || !where) return;
+    drag = {x: e.clientX, y: e.clientY, a, b, lo, hi, axis: where === "y" ? "y" : "x"};
+    cv.setPointerCapture(e.pointerId); cv.classList.add("drag");
+    tip.classList.add("hidden");
+  });
+  cv.addEventListener("pointermove", (e) => {
+    const [mx, my] = pos(e);
+    if (drag) {
+      if (drag.axis === "y") {
+        const d = (e.clientY - drag.y) / ph() * (drag.hi - drag.lo);
+        lo = drag.lo + d; hi = drag.hi + d; showY();
+      } else {
+        const d = (e.clientX - drag.x) / pw() * (drag.b - drag.a);
+        a = drag.a - d; b = drag.b - d; fix();
+      }
+      schedule();
+      return;
+    }
+    const where = region(mx, my);
+    cv.style.cursor = CURSOR[where];
+    if (where !== "plot") {
+      if (hoverI !== -1 || hoverLine) { hoverI = -1; hoverLine = null; schedule(); }
+      tip.classList.add("hidden");
+      return;
+    }
+    // 점이 커서 10px 안에 있으면 점이 먼저 (점 말풍선에도 그 순번의 기준값이 있다). 기준선 위에 놓인 점도 고를 수 있게
+    const [i, d] = nearest(mx, my), L = i >= 0 && d <= 10 ? null : nearLine(mx, my);
+    const ni = L ? -1 : i;
+    if (ni !== hoverI || !sameLine(L, hoverLine)) { hoverI = ni; hoverLine = L; schedule(); }
+    if (L) lineTip(L, mx, my); else showTip(ni, mx, my);
+  });
+  /* 구간 측정 결과: A·B 의 순번·시각, 간격(시:분:초), 그 사이 계량 수 */
+  const hms = (d) => `${Math.floor(d / 3600)}:${String(Math.floor(d / 60) % 60).padStart(2, "0")}:${String(d % 60).padStart(2, "0")}`;
+  function showMeasure() {
+    if (!pick.length) { mbox.classList.add("hidden"); return; }
+    const row = (k, i) => `<div><span class="k">${k}</span>순번 <b>${fmtN(i + 1)}</b> · ${esc(rows[i][0])} · ${esc(rows[i][1])} g</div>`;
+    let html = '<div class="head"><span>구간 측정</span><button class="btn mclear" title="지우기 (Esc)">지우기</button></div>' + row("A", pick[0]);
+    if (pick.length === 1) html += '<div class="note">두 번째 점(B)을 누르세요.</div>';
+    else {
+      const [p, q] = pick[0] <= pick[1] ? pick : [pick[1], pick[0]];
+      const d = Math.abs(ts[pick[1]] - ts[pick[0]]), c = {Pass: 0, Under: 0, Over: 0, Double: 0};
+      for (let i = p; i <= q; i++) if (rows[i][2] in c) c[rows[i][2]]++;
+      const ng = c.Under + c.Over + c.Double;
+      html += row("B", pick[1]) +
+        `<div><span class="k">간격</span><span class="big">${hms(d)}</span> <span class="note">(${fmtN(d)}초)</span></div>` +
+        `<div><span class="k">계량</span>${fmtN(q - p + 1)}개 (A·B 포함)` +
+        (q > p && d ? ` · 평균 ${fmtF(d / (q - p), 2)}초/개` : "") + `</div>` +
+        `<div><span class="k">판정</span>Pass ${fmtN(c.Pass)}` + (ng ? ` · <span style="color:var(--alarm)">불량 ${fmtN(ng)}</span>` : "") + `</div>`;
+    }
+    mbox.innerHTML = html;
+    mbox.classList.remove("hidden");
+    mbox.querySelector(".mclear").onclick = clearPick;
+  }
+  function clearPick() { pick = []; showMeasure(); schedule(); }
+  addEventListener("keydown", (e) => { if (e.key === "Escape" && pick.length) clearPick(); });
+  // 끌지 않고 누르기만 했을 때: 점 위면 A → B 로 고른다 (B 까지 고른 뒤 다시 누르면 새 A)
+  cv.addEventListener("pointerup", (e) => {
+    if (!drag || Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 4) return;
+    const [mx, my] = pos(e);
+    if (region(mx, my) !== "plot") return;
+    const [i] = nearest(mx, my);   // 말풍선이 뜨는 거리(14px)와 같게: 말풍선에 보이는 그 점을 고른다
+    if (i < 0 || hoverLine) return;
+    pick =pick.length >= 2 ? [i] : pick.concat(pick[0] === i ? [] : [i]);
+    showMeasure(); schedule();
+  });
+  const end = () => { drag = null; cv.classList.remove("drag"); };
+  cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
+  cv.addEventListener("pointerleave", () => { if (!drag) { hoverI = -1; hoverLine = null; tip.classList.add("hidden"); schedule(); } });
+  const reset = () => { a = 0; b = full; schedule(); };
+  cv.addEventListener("dblclick", (e) => { const [mx, my] = pos(e); if (region(mx, my) !== "y") reset(); });
+  info.querySelector(".reset").onclick = reset;
+
+  /* Y 최소 / 최대: 비워 두면 기본값. 적용하면 바로 다시 그린다 */
+  const yMin = info.querySelector(".ymin"), yMax = info.querySelector(".ymax"), yMsg = info.querySelector(".ymsg");
+  const r2 = (v) => +v.toFixed(3);
+  yMin.placeholder = `기본 ${r2(defLo)}`; yMax.placeholder = `기본 ${r2(defHi)}`;
+  function showY() { yMin.value = r2(lo); yMax.value = r2(hi); yMsg.textContent = ""; }
+  const applyY = () => {
+    const num = (el) => (el.value.trim() === "" ? null : Number(el.value));
+    const a1 = num(yMin), b1 = num(yMax);
+    if ((a1 !== null && !isFinite(a1)) || (b1 !== null && !isFinite(b1))) { yMsg.textContent = "숫자를 입력하세요."; return; }
+    const nlo = a1 ?? defLo, nhi = b1 ?? defHi;
+    if (nlo >= nhi) { yMsg.textContent = `최소(${r2(nlo)})가 최대(${r2(nhi)})보다 작아야 합니다.`; return; }
+    lo = nlo; hi = nhi; yMsg.textContent = "";
+    schedule();
+  };
+  info.querySelector(".yapply").onclick = applyY;
+  [yMin, yMax].forEach((el) => (el.onkeydown = (e) => { if (e.key === "Enter") applyY(); }));
+  info.querySelector(".ydefault").onclick = () => { yMin.value = yMax.value = ""; applyY(); };
+
+  return {
+    /* 기준 구간 k 의 바탕 칠하기를 켜고 끈다. 켜졌으면 true */
+    toggleSegment(k) {
+      if (marked.has(k)) marked.delete(k); else marked.add(k);
+      schedule();
+      return marked.has(k);
+    },
+    resize(h) {
+      const dpr = devicePixelRatio || 1;
+      W = box.clientWidth; H = h;
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.height = H + "px";
+      draw();
+    },
+  };
+}
+/* 시간 눈금 간격(초): raw 이상인 가장 작은 값 */
+function timeStep(raw) {
+  const S = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 10800, 21600, 43200, 86400];
+  return S.find((s) => s >= raw) || 86400;
+}
+function niceStep(raw) {
+  const mag = 10 ** Math.floor(Math.log10(raw || 1));
+  return [1, 2, 5, 10].map((k) => k * mag).find((s) => s >= raw);
+}
+
+/* ---------- 이력 ---------- */
+// history 행: [날짜, 시간, 사용자, 이벤트, 상세, 변경 전, 변경 후, 유형, 추정, 파일]
+let hRows = [], hPage = 0;
+function filterHistory() {
+  const from = $("#h-from").value, to = $("#h-to").value, type = $("#h-type").value, ev = $("#h-event").value,
+        user = $("#h-user").value, q = $("#h-q").value.trim().toLowerCase();
+  hRows = D.history.filter((h) => inRange(h[0], from, to) && (!type || h[7] === type) && (!ev || h[3] === ev) &&
+    (!user || h[2] === user) && (!q || [h[3], h[4], h[5], h[6]].join(" ").toLowerCase().includes(q))).reverse();
+  hPage = 0;
+  const by = (t) => hRows.filter((h) => h[7] === t).length;
+  $("#h-summary").innerHTML = `<div class="stat"><b>${fmtN(hRows.length)}</b><span>이력</span></div>` +
+    `<div class="stat"><b>${fmtN(by("Operation"))}</b><span>Operation</span></div>` +
+    `<div class="stat"><b>${fmtN(by("Parameter"))}</b><span>Parameter (설정 변경)</span></div>` +
+    `<div class="stat alarm"><b>${fmtN(by("Alarm"))}</b><span>Alarm</span></div>`;
+  drawHistory();
+}
+function drawHistory() {
+  const rows = hRows.slice(hPage * PAGE, (hPage + 1) * PAGE);
+  $("#t-history tbody").innerHTML = rows.map((h) =>
+    `<tr class="${h[7] === "Alarm" ? "alarm" : ""}"><td>${esc(h[0])}</td><td>${esc(h[1])}</td><td>${esc(h[2])}</td><td>${esc(h[3])}</td>` +
+    `<td>${esc(h[4])}</td><td>${esc(h[5])}</td><td>${esc(h[6])}${h[8] ? ' <span title="쉼표가 있어 나눈 위치를 추정함">※</span>' : ""}</td>` +
+    `<td>${esc(h[7])}</td><td class="note">${esc(D.files[h[9]][0].split(/[\\/]/).pop())}</td></tr>`).join("")
+    || '<tr><td colspan="9" class="note">조건에 맞는 이력이 없습니다.</td></tr>';
+  pager($("#h-pager"), hRows.length, hPage, (p) => { hPage = p; drawHistory(); });
+}
+["#h-from", "#h-to", "#h-type", "#h-event", "#h-user"].forEach((s) => ($(s).onchange = filterHistory));
+let hq; $("#h-q").oninput = () => { clearTimeout(hq); hq = setTimeout(filterHistory, 200); };
+$("#h-reset").onclick = () => { ["#h-from", "#h-to", "#h-type", "#h-event", "#h-user", "#h-q"].forEach((s) => ($(s).value = "")); filterHistory(); };
+
+/* ---------- 통계 / 파일 ---------- */
+function drawStats() {
+  const n = Math.max(0, ...D.stats.map((r) => r.length - 1));
+  const names = ["품명", "품목", "Lot", "시작", "종료"];
+  $("#t-stats thead").innerHTML = "<tr><th>파일</th>" + Array.from({length: n}, (_, i) => `<th>${names[i] || "열 " + (i + 1)}</th>`).join("") + "</tr>";
+  $("#t-stats tbody").innerHTML = D.stats.map((r) =>
+    `<tr><td class="note">${esc(D.files[r[0]][0].split(/[\\/]/).pop())}</td>` +
+    r.slice(1).map((v, i) => `<td class="${i >= 5 ? "num" : ""}">${esc(v)}</td>`).join("") + "</tr>").join("")
+    || '<tr><td class="note">통계 파일이 없습니다.</td></tr>';
+}
+function drawFiles() {
+  $("#f-header").innerHTML = Object.entries(D.header).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")
+    || '<dt>-</dt><dd class="note">Header 폴더의 _h.ini 가 없습니다.</dd>';
+  $("#t-files tbody").innerHTML = D.files.map((f) =>
+    `<tr${f[5] === "OK" ? "" : ' class="alarm"'}><td>${esc(D.kind_names[f[1]] || f[1])}</td><td>${esc(f[0])}</td>` +
+    `<td class="num">${fmtN(f[2])}</td><td>${esc(f[3])}</td><td class="num">${fmtN(f[4])}</td><td>${esc(f[5])}</td></tr>`).join("");
+  $("#t-alarms tbody").innerHTML = D.alarms.map((a) =>
+    `<tr class="alarm"><td>${esc(a[1])}</td><td>${esc(a[2])}</td><td>${esc(a[3])}</td><td>${esc(a[4])}</td>` +
+    `<td class="note">${esc(D.files[a[0]][0].split(/[\\/]/).pop())}</td></tr>`).join("")
+    || '<tr><td colspan="5" class="note">알람 백업 파일이 없습니다.</td></tr>';
+}
+
+/* ---------- 불러오기 ---------- */
+async function load(reload) {
+  if (SET.device < 0) {
+    if (LIVE) {
+      $("#loading").textContent = "운영 화면에 올린 중량선별기 장비가 없습니다." +
+        (SET.admin ? " 테스트 페이지의 '장비 설정'에서 '운영 화면에 표시'를 켜세요." : " 관리자에게 문의하세요.");
+      return;
+    }
+    $("#loading").textContent = "중량선별기 장비가 없습니다. '+ 장비 추가'로 장비 이름과 데이터 폴더를 등록하세요.";
+    openDev(true);
+    return;
+  }
+  $("#loading").classList.remove("hidden"); $("#loading").textContent = "데이터를 읽는 중…";
+  ["runs", "history", "stats", "files"].forEach((x) => $("#tab-" + x).classList.add("hidden"));
+  try {
+    const res = await fetch(`${BASE}/api/data?${dq}${reload ? "&reload" : ""}`, {cache: "no-store"});
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || res.statusText);
+    D = json;
+  } catch (e) { $("#loading").textContent = ""; banner("데이터를 읽지 못했습니다: " + e.message); return; }
+  banner("");
+  $("#loading").classList.add("hidden");
+  const bad = D.files.filter((f) => f[5] !== "OK").length;
+  $("#meta").textContent = `${D.root ? D.root + " · " : ""}시리얼 ${D.header.SerialNumber || "-"} · ` +
+    (D.period.length ? `${D.period[0]} ~ ${D.period[1]} · ` : "") + `파일 ${fmtN(D.files.length)}개` + (bad ? ` (읽지 못함 ${bad})` : "");
+  $("#n-runs").textContent = fmtN(D.runs.length);
+  $("#n-history").textContent = fmtN(D.history.length);
+  $("#n-stats").textContent = fmtN(D.stats.length);
+  $("#n-files").textContent = fmtN(D.files.length);
+  const uniq = (a) => [...new Set(a.filter(Boolean))].sort();
+  for (const [sel, col] of [["#h-type", 7], ["#h-event", 3], ["#h-user", 2]]) {
+    $(sel).length = 1;
+    uniq(D.history.map((h) => h[col])).forEach((v) => $(sel).add(new Option(v, v)));
+  }
+  rSel = null;
+  filterRuns(); filterHistory(); drawStats(); drawFiles();
+  let saved = "runs";
+  try { saved = sessionStorage.getItem("wc.tab") || "runs"; } catch (e) {}
+  showTab(["runs", "history", "stats", "files"].includes(saved) ? saved : "runs");
+}
+
+/* ---------- 그래프 창 (/lab/run?d=&f=) ---------- */
+/* Audit Trail: 작업 일자 전체의 이력 (작업 전 준비 행위까지 보이게). 자정을 넘긴 런이면 다음 날까지.
+   행마다 이 런의 작업 기간(첫 계량 직전 Start ~ 마지막 계량 직후 Stop) 기준으로 작업 전 / 작업 중 / 작업 후 를 표시한다.
+   J.history 행: [날짜, 시간, 사용자, 이벤트, 상세, 변경 전, 변경 후, 유형, 추정 여부, 파일 이름] (서버가 작업 일자의 이력만 보낸다) */
+function auditPicker(J, r) {
+  const w0 = new Date(`${r[R.date]}T${r[R.start]}`), w1 = new Date(`${r[R.date]}T${r[R.end]}`);
+  if (w1 < w0) w1.setDate(w1.getDate() + 1);   // 자정을 넘긴 런
+  const at = (h) => new Date(`${h[0]}T${h[1]}`);
+  // 장비는 Start 를 첫 계량보다 조금 먼저, Stop 을 마지막 계량보다 조금 뒤에 남긴다.
+  // 작업 기간 = 첫 계량 직전의 Start ~ 마지막 계량 직후의 Stop (각각 60분 안에 있을 때). 없으면 계량 시각 그대로
+  const LOOK = 60 * 60000, ops = J.history.filter((h) => h[7] === "Operation");
+  const sA = ops.filter((h) => h[3] === "Start" && at(h) <= w0 && w0 - at(h) <= LOOK).sort((a, b) => at(b) - at(a))[0];
+  const sB = ops.filter((h) => h[3] === "Stop" && at(h) >= w1 && at(h) - w1 <= LOOK).sort((a, b) => at(a) - at(b))[0];
+  const t0 = sA ? at(sA) : w0, t1 = sB ? at(sB) : w1;
+  const phase = (h) => (at(h) < t0 ? "before" : at(h) > t1 ? "after" : "during");
+  const pick = (type, duringOnly) => J.history.filter((h) => (!type || h[7] === type) && (!duringOnly || phase(h) === "during"))
+    .sort((a, b) => at(a) - at(b));
+  return {pick, phase, from: sA ? sA[1] : r[R.start], to: sB ? sB[1] : r[R.end], hasStart: !!sA, hasStop: !!sB};
+}
+/* 독립 창 크기·위치 기억 (key: localStorage 이름) */
+function winGeom(key, def) {
+  try { const g = JSON.parse(localStorage.getItem(key)); if (g && g.w > 300 && g.h > 200) return g; } catch (e) {}
+  return def;
+}
+function rememberGeom(key) {
+  const save = () => { try { localStorage.setItem(key, JSON.stringify({w: outerWidth, h: outerHeight, x: screenX, y: screenY})); } catch (e) {} };
+  addEventListener("resize", save); addEventListener("beforeunload", save); setInterval(save, 2000);
+}
+/* 그래프 창의 버튼: 이 런의 Audit Trail 을 독립 창으로 연다 (런마다 창 하나, 이미 열려 있으면 앞으로) */
+function auditButton(el, J, r) {
+  const btn = el.querySelector(".audit-btn");
+  btn.innerHTML = `Audit Trail <span class="count">${fmtN(auditPicker(J, r).pick("").length)}건</span>`;
+  btn.title = "작업 일자 전체의 이력 (작업 전 준비 · 조작 · 설정 변경 · 알람)";
+  btn.onclick = () => {
+    const g = winGeom("wc.auditwin", {w: Math.min(1200, screen.availWidth - 40), h: Math.min(760, screen.availHeight - 40),
+      x: screenX + 60, y: screenY + 60});
+    const w = window.open(`${BASE}/audit?${dq}&f=${SET.run}`, `wc-audit-${SET.device}-${SET.run}`,
+      `popup=yes,width=${Math.round(g.w)},height=${Math.round(g.h)},left=${Math.round(g.x)},top=${Math.round(g.y)}`);
+    if (!w) { alert("팝업 창이 차단되었습니다.\n브라우저 주소창 오른쪽의 팝업 차단 표시를 눌러 이 사이트(127.0.0.1)의 팝업을 허용해 주세요."); return; }
+    w.focus();
+  };
+}
+/* Audit Trail 창 (/lab/audit) */
+async function auditWindow() {
+  document.body.classList.add("runmode");
+  document.body.insertAdjacentHTML("afterbegin", '<div id="run-view" class="audit-view"><div class="loading">이력 불러오는 중…</div></div>');
+  const el = $("#run-view");
+  let J;
+  try {
+    const res = await fetch(`${BASE}/api/run?${dq}&f=${SET.audit}&norows`, {cache: "no-store"});
+    J = await res.json();
+    if (!res.ok) throw new Error(J.error || res.statusText);
+  } catch (e) { el.innerHTML = `<div class="banner">불러오지 못했습니다: ${esc(e.message)}</div>`; return; }
+  const r = J.run, P = auditPicker(J, r);
+  document.title = `Audit Trail · ${r[R.name]} · ${r[R.date]}`;
+  el.innerHTML =
+    `<h2>Audit Trail · ${esc(r[R.name])} · ${esc(r[R.lot])}</h2>` +
+    `<div class="note">${esc(J.device)} · 작업 일자 <b>${esc(r[R.date])}</b> 전체 · 이 런의 작업 기간 <b>${esc(P.from)} – ${esc(P.to)}</b>` +
+    ` (${P.hasStart ? "Start" : "첫 계량"} ~ ${P.hasStop ? "Stop" : "마지막 계량"} · 계량은 ${esc(r[R.start])} – ${esc(r[R.end])}) · ${esc(J.file)}</div>` +
+    '<div class="frow audit-opts"><label><input type="checkbox" class="a-during"> 작업 중만 보기</label>' +
+    '<label>유형 <select class="a-type"><option value="">전체</option><option>Operation</option><option>Parameter</option><option>Alarm</option></select></label>' +
+    '<span class="a-count note"></span></div>' +
+    '<div class="tablewrap"><table><thead><tr><th>구분</th><th>날짜</th><th>시간</th><th>사용자</th><th>이벤트</th><th>상세</th><th>변경 전</th><th>변경 후</th><th>유형</th><th>파일</th></tr></thead>' +
+    '<tbody></tbody></table></div>';
+  const du = el.querySelector(".a-during"), ty = el.querySelector(".a-type"), wrap = el.querySelector(".tablewrap");
+  const PH = {before: "작업 전", during: "작업 중", after: "작업 후"};
+  const draw = () => {
+    const rows = P.pick(ty.value, du.checked);
+    const n = (k) => rows.filter((h) => P.phase(h) === k).length;
+    el.querySelector(".a-count").textContent =
+      `${fmtN(rows.length)}건` + (du.checked ? "" : ` (작업 전 ${fmtN(n("before"))} · 작업 중 ${fmtN(n("during"))} · 작업 후 ${fmtN(n("after"))})`);
+    el.querySelector("tbody").innerHTML = rows.map((h) => {
+      const ph = P.phase(h);   // 작업 기간 밖의 행은 흐리게
+      return `<tr class="${h[7] === "Alarm" ? "alarm" : ""}${ph !== "during" ? " outside" : ""}">` +
+        `<td class="phase ${ph}">${PH[ph]}</td><td>${esc(h[0])}</td><td>${esc(h[1])}</td><td>${esc(h[2])}</td><td>${esc(h[3])}</td><td>${esc(h[4])}</td>` +
+        `<td>${esc(h[5])}</td><td>${esc(h[6])}${h[8] ? ' <span title="쉼표가 있어 나눈 위치를 추정함">※</span>' : ""}</td>` +
+        `<td>${esc(h[7])}</td><td class="note">${esc(h[9])}</td></tr>`;
+    }).join("") || '<tr><td colspan="10" class="note">남은 이력이 없습니다.</td></tr>';
+  };
+  du.onchange = ty.onchange = draw;
+  draw();
+  // 표 높이 = 창 높이 - 표 위쪽 (창 크기를 바꾸면 따라간다)
+  const fit = () => (wrap.style.maxHeight = Math.max(160, innerHeight - wrap.getBoundingClientRect().top - 16) + "px");
+  fit(); addEventListener("resize", fit);
+  rememberGeom("wc.auditwin");
+}
+async function runWindow() {
+  document.body.classList.add("runmode");
+  document.body.insertAdjacentHTML("afterbegin", '<div id="run-view"><div class="loading">중량 기록 불러오는 중…</div></div>');
+  const el = $("#run-view");
+  let J;
+  try {
+    const res = await fetch(`${BASE}/api/run?${dq}&f=${SET.run}`, {cache: "no-store"});
+    J = await res.json();
+    if (!res.ok) throw new Error(J.error || res.statusText);
+  } catch (e) { el.innerHTML = `<div class="banner">불러오지 못했습니다: ${esc(e.message)}</div>`; return; }
+  const r = J.run, ng = r[R.under] + r[R.over] + r[R.dbl];
+  const segs = limitSegments(J.rows);
+  document.title = `${r[R.name]} · ${r[R.date]} · 중량 추이`;
+  el.innerHTML =
+    `<h2>${esc(r[R.name])} · ${esc(r[R.lot])}</h2>` +
+    `<div class="note">${esc(J.device)} · ${esc(r[R.date])} ${esc(r[R.start])}–${esc(r[R.end])} · 품목 ${esc(r[R.pno])} · ${esc(J.file)}</div>` +
+    '<div class="summary">' +
+    [["작업시간", workTime(r)], ["계량", fmtN(r[R.n])], ["Pass", fmtN(r[R.pass])], ["Under", fmtN(r[R.under]), r[R.under]], ["Over", fmtN(r[R.over]), r[R.over]],
+     ["Double", fmtN(r[R.dbl]), r[R.dbl]], ["불량률", fmtF(r[R.ng], 2) + "%", ng], ["평균", fmtF(r[R.mean], 3)], ["표준편차", fmtF(r[R.sd], 3)],
+     // 기록 시작 때의 기준만 (바뀐 값은 그래프의 기준선·변경선과 말풍선으로 본다)
+     ["시작 기준 (U / P / O)", segs.length ? fmtLim([segs[0].u, segs[0].p, segs[0].o]) : ""],
+     ["기준 변경", `${segs.length - 1}회`, segs.length > 1]]
+      .map(([k, v, bad]) => `<div class="stat${bad ? " alarm" : ""}"><b>${v}</b><span>${k}</span></div>`).join("") +
+    '<button class="btn audit-btn" title="이 런의 작업 기간에 남은 이력 (조작 · 설정 변경 · 알람)"></button></div>' +
+    '<div class="legend"><span><i style="background:var(--g-pass)"></i>Pass</span><span><i style="background:var(--g-under)"></i>Under</span>' +
+    '<span><i style="background:var(--g-over)"></i>Over</span>' +
+    '<span title="두 제품이 너무 붙어 들어와 한 개씩 계량하지 못함 (중량이 아니라 간격으로 판정)"><i class="dbl"></i>Double (겹침)</span>' +
+    '<span><i class="dash" style="color:var(--lim-hi)"></i>상한 (Over)</span><span><i class="line" style="background:var(--ok)"></i>Pass 기준</span>' +
+    '<span><i class="dash" style="color:var(--lim-lo)"></i>하한 (Under)</span><span><i class="vline" style="background:var(--change)"></i>기준 변경</span></div>' +
+    segTable(segs, J.rows) +
+    '<div class="chart"><canvas></canvas><div class="tip hidden"></div><div class="measure hidden"></div></div>' +
+    '<div class="hover"><span class="range"></span><button class="btn reset">전체 보기</button>' +
+    '<span class="yset">Y 최소 <input class="ymin" inputmode="decimal"> Y 최대 <input class="ymax" inputmode="decimal">' +
+    '<button class="btn yapply">적용</button><button class="btn ydefault" title="상한(Over) +5% / 하한(Under) -5%">기본값</button>' +
+    '<span class="ymsg"></span></span>' +
+    '<span>휠: 그래프·X축 바탕 → 시간 확대·축소, Y축 바탕 → 중량 확대·축소 · 드래그: 이동 · 더블클릭: 전체 시간 · 점에 커서: 측정 정보 · 점 두 개 클릭: 시간 간격 (Esc: 지우기)</span></div>';
+  const chart = weightChart(el.querySelector(".chart"), el.querySelector(".hover"), J.rows, r[R.date]);
+  // 검사 내용 표의 행을 누르면 그 구간의 그래프 바탕을 칠하고, 다시 누르면 지운다 (여러 행 함께 가능)
+  el.querySelectorAll(".seg-table tbody tr").forEach((tr) => (tr.onclick = () => {
+    tr.classList.toggle("on", chart.toggleSegment(+tr.dataset.k));
+  }));
+  auditButton(el, J, r);
+  // 그래프 높이 = 창 높이 - 그래프 위쪽 - 아래 조작 줄 (조작 줄은 창 폭에 따라 두 줄이 되기도 한다)
+  const draw = () => chart.resize(Math.max(220, innerHeight - el.querySelector("canvas").getBoundingClientRect().top
+    - el.querySelector(".hover").offsetHeight - 22));
+  draw();
+  let t; addEventListener("resize", () => { clearTimeout(t); t = setTimeout(draw, 120); });
+  // 창 크기·위치를 기억해 다음 그래프 창에 쓴다
+  const save = () => { try { localStorage.setItem("wc.runwin", JSON.stringify({w: outerWidth, h: outerHeight, x: screenX, y: screenY})); } catch (e) {} };
+  addEventListener("resize", save); addEventListener("beforeunload", save); setInterval(save, 2000);
+}
+if (SET.audit != null) auditWindow(); else if (SET.run != null) runWindow(); else load(false);
+</script>
+</body>
+</html>

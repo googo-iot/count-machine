@@ -25,11 +25,36 @@ pip install pdfplumber openpyxl
 ## 사용법
 
 ```powershell
-# 로컬 뷰어 (http://127.0.0.1:8766 에서만 열림)
+# 뷰어 (기본: 이 PC 의 http://127.0.0.1:8766 에서만 열림)
 python -m auditpdf serve
 
-#   폴더: 화면 오른쪽 위 '폴더 설정'에서 경로 입력 또는 '찾아보기…' → 적용.
-#   고른 폴더는 %APPDATA%\audit-pdf-viewer\config.json 에 저장되어 다음 실행과 report/export/diagnose 에서도 쓰인다.
+#   장비: 제목 아래 장비 탭(예: [COU-P001]12열계수기, [COU-P004]24열계수기)을 눌러 장비별 PDF 폴더를 본다.
+#         '+ 장비 추가' → 장비 이름과 PDF 루트 폴더(경로 입력 또는 '찾아보기…') → 적용.
+#         '장비 설정' → 지금 장비의 이름·폴더를 고치거나 목록에서 지운다 (PDF 와 캐시는 지우지 않는다).
+#         한 번 다 읽은 장비는 메모리에 두어 탭을 다시 누르면 바로 보인다. 새로 읽으려면 '다시 읽기'.
+#         장비를 바꾸기 전에 연 PDF·NG 이미지 팝업은 다시 열어야 한다 (다른 장비의 파일을 잘못 보여 주지 않도록 막는다).
+#   다른 PC 에서 보기 (내부망, 몇 명 이내):
+#         서버 PC 의 뷰어에서 '접속 허용 IP' → '다른 PC 접속 허용' 켜기 + 접속할 PC 의 IP(또는 /24 이하 대역) 등록 → 저장.
+#         '다른 PC 접속 허용' 을 켜고 끄는 것은 같은 창의 '서버 다시 시작' 버튼으로 적용한다. IP 목록은 저장하면 바로 적용.
+#         (다시 시작은 접속받는 주소만 다시 열고 읽은 데이터는 그대로 둔다. 실행할 때 --host 0.0.0.0 으로도 켤 수 있다.)
+#         다른 PC 는 http://<서버 PC IP>:8766/ 으로 접속한다. 목록에 없는 PC 는 거절되고 '최근 거부된 접속' 에 남아 바로 등록할 수 있다.
+#         허용된 PC 는 보기 전용: 장비 탭 · 검색 · PDF 원본 · NG 이미지 · Excel/CSV 저장.
+#         장비 설정 · 다시 읽기 · 중지 · 접속 허용 IP 는 서버 PC 에서만 (127.0.0.1 또는 서버 PC 자신의 IP 로 접속).
+#         보는 장비는 주소(/?d=번호)로 정해 사람마다 다른 장비를 동시에 볼 수 있다.
+#         서버 PC 의 Windows 방화벽에서 TCP 8766 인바운드를 허용해야 한다 (예: 관리자 PowerShell 에서
+#           New-NetFirewallRule -DisplayName "계수기 리포트 뷰어" -Direction Inbound -Protocol TCP -LocalPort 8766 -RemoteAddress <허용 IP들> -Action Allow).
+#         원본 PDF 는 서버 PC 가 읽으므로 다른 PC 에는 공유 폴더 권한이 필요 없다.
+#   장비 목록과 지금 폴더는 %APPDATA%\audit-pdf-viewer\config.json 에 저장되어 다음 실행과 report/export/diagnose 에서도 쓰인다.
+#
+#   중량선별기 운영 화면 (http://<서버>:8766/wc): 화면 맨 위 카테고리 탭(계수기 / 중량선별기)으로 오간다.
+#     ITC81DB 계열 CSV (예: C:\#Inbox\WC). 허용 IP 의 다른 PC 는 보기 전용, 다시 읽기는 서버 PC 에서만.
+#   테스트 페이지 (http://127.0.0.1:8766/lab, 서버 PC 에서만): 중량선별기 장비 추가·변경·삭제.
+#     장비 설정의 '운영 화면에 표시'를 켠 장비만 /wc 와 다른 PC 에 보인다 (config.json 의 wc_devices, stage=live).
+#     검사 (런): Data\Inspection 의 I날짜-품목.csv 하나가 한 런. 계량 수, Pass/Under/Over/Double, 불량률, 평균·표준편차,
+#               기준 변경 횟수. 행 클릭 → 중량 추이 그래프 (판정별 색, Under/Pass/Over 기준선). 주소 끝 #run=번호 로 바로 열기.
+#     이력: Data\History 의 H날짜.csv (감사 추적). 유형·이벤트·사용자·기간 필터, Alarm 강조.
+#     통계: Data\Others 의 S*.csv (머리글이 없어 6번째 열부터는 의미 미확인). 파일: 읽은 파일 목록, 장비 정보(Header), 알람 백업.
+#     CSV 에 따옴표가 없어 품명·값에 쉼표가 있으면 열이 늘어난다: 검사 기록은 품명으로 다시 합치고, 이력은 나눈 위치를 추정해 ※ 로 표시.
 #   PDF 는 별도 스레드에서 읽고 진행률을 보여 준다. 중지할 수 있다.
 #   읽은 결과는 %APPDATA%\audit-pdf-viewer\cache 에 저장되어, 다시 켜도 새 파일과 바뀐 파일(경로·크기·수정 시각)만 읽는다.
 #   auditpdf/pdf.py 를 고치면 기존 캐시는 자동으로 무시된다. 캐시를 비우려면 그 폴더를 지우면 된다.
@@ -91,7 +116,9 @@ COU-P002 공유 폴더(배치 146개, PDF 584건)는 처음 약 40분, 그 뒤�
 | [auditpdf/images.py](auditpdf/images.py) | NG 이미지 꺼내기 (열어 둔 PDF 재사용) |
 | [auditpdf/scan.py](auditpdf/scan.py) | 파일명 규칙, 폴더 탐색, PDF 별 결과·해시, 메모리/디스크 캐시 |
 | [auditpdf/excel.py](auditpdf/excel.py) | Excel / CSV |
-| [auditpdf/server.py](auditpdf/server.py) | 로컬 뷰어 서버 (NG 이미지 `/img`) |
+| [auditpdf/server.py](auditpdf/server.py) | 뷰어 서버 (장비별 결과, 접속 허용 IP, NG 이미지 `/img`) |
+| [auditpdf/lab.py](auditpdf/lab.py) · [wc_template.html](auditpdf/wc_template.html) | 중량선별기 화면: 운영 `/wc` (보기 전용) · 테스트 `/lab` (서버 PC 전용, 장비 관리) |
+| [auditpdf/wc.py](auditpdf/wc.py) | 중량선별기 CSV 읽기 (검사 기록 · 이력 · 통계 · 알람 백업) |
 | [auditpdf/report_template.html](auditpdf/report_template.html) | 화면 (데이터를 JSON 으로 넣어 파일 하나로도 동작) |
 | [auditpdf/config.py](auditpdf/config.py) | 설정 파일, 폴더 선택 창 |
 | [auditpdf/diagnose.py](auditpdf/diagnose.py) | 추출 실패 원인 진단 |

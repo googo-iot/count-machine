@@ -87,6 +87,11 @@ mark { background: #ffe58f; color: inherit; border-radius: 2px; }
 .pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 10px; color: var(--muted); }
 .empty { padding: 40px; text-align: center; color: var(--muted); }
 .hidden { display: none !important; }
+/* 카테고리 탭 (계수기 / 중량선별기) */
+.cats { display: flex; gap: 4px; margin-bottom: 6px; font-size: 14px; }
+.cats a { padding: 2px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); text-decoration: none; }
+.cats a.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.cats a[href]:hover { border-color: var(--accent); color: var(--text); }
 #b-start, #b-end { width: 170px; }   /* 기본 131px 의 1.3배 */
 .summary.in-filters { margin: 0 0 0 auto; gap: 8px; }   /* 검색 칸 오른쪽 끝 */
 .summary.in-filters .stat { padding: 4px 12px; min-width: 96px; }
@@ -168,6 +173,23 @@ tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .frow { display: flex; gap: 8px; align-items: center; }
 .frow.end { margin-top: 14px; justify-content: flex-end; }
 #root-input { flex: 1; font-family: Consolas, "Malgun Gothic", monospace; }
+/* 장비 탭 (serve) */
+.devices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.devices .btn { padding: 4px 12px; font-size: 15px; }
+.devices .btn.on { font-weight: 600; }
+.devices .add { color: var(--muted); border-style: dashed; }
+.frow.end .grow { margin-right: auto; }
+/* 접속 허용 IP (serve, 서버 PC) */
+.acc-state { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; font-size: 15px; line-height: 1.7; }
+.acc-state code, .sheet code { font-family: Consolas, "Malgun Gothic", monospace; }
+.acc-lan { display: flex; gap: 8px; align-items: center; margin-top: 12px; font-size: 15px; }
+.acc-table input { width: 100%; }
+.acc-table td { vertical-align: middle; }
+.acc-table td:last-child { width: 1%; }
+.acc-on { color: var(--ok); font-weight: 600; } .acc-off { color: var(--muted); font-weight: 600; }
+.viewer-note { color: var(--muted); font-size: 14px; align-self: center; }
+.btn.danger { color: var(--alarm); }
+#dev-name { flex: 1; }
 .recent { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .recent:empty { display: none; }
 .recent::before { content: "최근 폴더"; color: var(--muted); font-size: 14px; align-self: center; margin-right: 2px; }
@@ -209,12 +231,17 @@ tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 <body>
 <header>
   <div>
+    <div class="cats live hidden" id="cats"><a class="on">계수기</a><a href="/wc">중량선별기</a></div>
     <h1>계수기 리포트</h1>
+    <div class="devices live" id="devices"></div>
     <div class="meta" id="meta"></div>
   </div>
   <div class="hbtns" id="hbtns">
-    <button class="btn live" id="btn-root">폴더 설정</button>
-    <a class="btn live" id="btn-reload" href="/?reload">다시 읽기</a>
+    <span class="viewer-note hidden" id="viewer-note">보기 전용</span>
+    <button class="btn live admin" id="btn-root">장비 설정</button>
+    <button class="btn live admin" id="btn-access">접속 허용 IP</button>
+    <a class="btn live admin" id="btn-reload" href="/?reload">다시 읽기</a>
+    <a class="btn live admin" id="btn-lab" href="/lab" title="운영 전 장비 종류를 시험하는 페이지 (이 PC 에서만)">테스트 페이지</a>
     <button class="btn live primary" id="btn-xlsx">Excel 저장</button>
     <button class="btn" id="btn-csv" title="지금 보이는 감사 추적 목록 (필터 적용)">CSV</button>
   </div>
@@ -233,7 +260,7 @@ tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
     <div class="track"><div class="fill" id="job-fill"></div></div>
     <div class="row">
       <span id="job-count">준비 중…</span>
-      <button class="btn" id="job-cancel">중지</button>
+      <button class="btn admin" id="job-cancel">중지</button>
     </div>
     <div class="name" id="job-name"></div>
   </section>
@@ -299,15 +326,40 @@ tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 
 <div class="modal hidden" id="m-root">
   <div class="sheet">
-    <div class="sheet-head"><h2>PDF 루트 폴더</h2><button class="btn" data-close>닫기</button></div>
+    <div class="sheet-head"><h2 id="root-title">장비 설정</h2><button class="btn" data-close>닫기</button></div>
     <p class="note">하위 폴더를 모두 찾아 파일명에 리포트 종류 단어(<span id="kw"></span>)가 들어간 PDF 를 읽습니다. 원본 PDF 는 바꾸지 않습니다.<br>
       설정은 <span id="cfg-path"></span> 에 저장됩니다.</p>
-    <div class="field">경로
+    <div class="field">장비 이름
+      <div class="frow"><input id="dev-name" spellcheck="false" placeholder="예: [COU-P004]24열계수기"></div>
+    </div>
+    <div class="field" style="margin-top:10px">PDF 루트 폴더
       <div class="frow"><input id="root-input" spellcheck="false"><button class="btn" id="root-browse">찾아보기…</button></div>
     </div>
     <div class="recent" id="recent"></div>
     <div class="msg" id="root-msg"></div>
-    <div class="frow end"><button class="btn primary" id="root-apply">적용</button></div>
+    <div class="frow end"><button class="btn danger grow" id="dev-delete">장비 삭제</button><button class="btn primary" id="root-apply">적용</button></div>
+  </div>
+</div>
+
+<div class="modal hidden" id="m-access">
+  <div class="sheet wide">
+    <div class="sheet-head"><h2>접속 허용 IP</h2><button class="btn" data-close>닫기</button></div>
+    <p class="note">내부망의 다른 PC 에서 이 뷰어를 보려면 '다른 PC 접속 허용'을 켜고, 그 PC 의 IP 를 아래에 등록하세요.
+      등록된 PC 는 보기 · 검색 · PDF 원본 · Excel/CSV 저장만 할 수 있고, 장비 설정 · 다시 읽기 · 이 메뉴는 이 PC(서버)에서만 됩니다.<br>
+      한 줄에 IP 하나(예: <code>192.168.10.21</code>) 또는 대역(예: <code>192.168.10.0/24</code>).</p>
+    <div class="acc-state" id="acc-state"></div>
+    <label class="acc-lan"><input type="checkbox" id="acc-lan"> 다른 PC 접속 허용
+      <span class="note" style="margin:0">(켜고 끄는 것은 서버를 다시 시작하면 적용)</span></label>
+    <h3>허용 목록</h3>
+    <div class="tablewrap"><table class="acc-table"><thead><tr><th>IP 또는 대역</th><th>이름 / 메모</th><th></th></tr></thead>
+      <tbody id="acc-rows"></tbody></table></div>
+    <div class="frow" style="margin-top:8px"><button class="btn" id="acc-add">+ 행 추가</button></div>
+    <div id="acc-denied-wrap"><h3>최근 거부된 접속</h3>
+      <div class="tablewrap"><table><thead><tr><th>IP</th><th>마지막 시각</th><th>횟수</th><th></th></tr></thead>
+        <tbody id="acc-denied"></tbody></table></div></div>
+    <div class="msg" id="acc-msg"></div>
+    <div class="frow end"><button class="btn grow" id="acc-restart" title="접속받는 주소만 다시 엽니다. 읽은 데이터는 그대로입니다.">서버 다시 시작</button>
+      <button class="btn primary" id="acc-save">저장</button></div>
   </div>
 </div>
 
@@ -321,6 +373,7 @@ tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 
 
 <script>
+const SET = /*__SET__*/null || {};   // serve: 요청마다 서버가 넣는 설정 (장비 목록, 관리자 여부 등)
 const DATA = /*__DATA__*/null;
 const PAGE = 200;
 const $ = (s) => document.querySelector(s);
@@ -334,6 +387,9 @@ const KIND = DATA.kind_names || {};
 
 /* ---------- 상단 ---------- */
 document.querySelectorAll(".live").forEach((el) => el.classList.toggle("hidden", !DATA.live));
+$("#cats").classList.toggle("hidden", !DATA.live || !SET.wc);   // 운영 중량선별기 장비가 있을 때만 카테고리 탭
+document.querySelectorAll(".admin").forEach((el) => el.classList.toggle("hidden", !!DATA.live && !SET.admin));
+$("#viewer-note").classList.toggle("hidden", !DATA.live || !!SET.admin);
 const files = DATA.files, audit = DATA.audit;
 let bottle = DATA.bottle || [], ngs = DATA.ng || [];   // serve 에서는 처음 쓸 때 받는다 (loadRows)
 const batchList = DATA.batches || [];
@@ -351,9 +407,9 @@ $("#kw").textContent = DATA.keyword || "AuditTrailLog";
 if (DATA.error) {
   const b = $("#banner");
   b.classList.remove("hidden");
-  b.innerHTML = esc(DATA.error) + (DATA.live ? ' <button class="btn" id="banner-root">폴더 설정</button>' : "");
+  b.innerHTML = esc(DATA.error) + (DATA.live && SET.admin ? ' <button class="btn" id="banner-root">장비 설정</button>' : "");
   const br = $("#banner-root");
-  if (br) br.onclick = openRoot;
+  if (br) br.onclick = () => openRoot();
 }
 
 /* ---------- 탭 ---------- */
@@ -496,7 +552,7 @@ const loaded = {bottle: !DATA.lazy, ng: !DATA.lazy}, loading = {};
 function loadRows(kind) {
   if (loaded[kind]) return Promise.resolve();
   if (!loading[kind]) {
-    loading[kind] = fetch("/api/rows?kind=" + kind, {cache: "no-store"}).then((r) => r.json()).then((rows) => {
+    loading[kind] = fetch("/api/rows?kind=" + kind + "&r=" + DATA.rid, {cache: "no-store"}).then((r) => r.json()).then((rows) => {
       if (kind === "bottle") bottle = rows; else ngs = rows;
       loaded[kind] = true;
     });
@@ -603,7 +659,7 @@ function updatePdfBtn() {
 }
 function pdfUrl(fi, page) {
   const f = files[fi], at = page ? `#page=${page}` : "";
-  if (DATA.live) return `/pdf?f=${fi}${at}`;
+  if (DATA.live) return `/pdf?f=${fi}&r=${DATA.rid}${at}`;
   // 파일 하나로 된 리포트: 원본 경로를 직접 연다 (같은 PC 에서 볼 때)
   const path = [DATA.source, f[FILE.folder] === DATA.source.split(/[\\/]/).pop() ? "" : f[FILE.folder], f[FILE.name]]
     .filter(Boolean).join("\\");
@@ -1041,7 +1097,7 @@ function openPopup(b, fi) {
     w.document.close();
   }
   rowsP.then((rows) => {
-    const payload = {kind, title, rows, live: !!DATA.live, origin: DATA.live ? new URL(document.baseURI).origin : "", file: f[FILE.name],
+    const payload = {kind, title, rows, live: !!DATA.live, origin: DATA.live ? new URL(document.baseURI).origin : "", rid: DATA.rid, file: f[FILE.name],
       batch: fileMeta(f, "BATCH NUMBER"), recipe: fileMeta(f, "RECIPE NAME"), machine: fileMeta(f, "MACHINE ID")};
     const css = [...document.querySelectorAll("style")].map((s) => s.textContent).join("\n");
     const json = JSON.stringify(payload).replace(/</g, "\\u003c");
@@ -1185,7 +1241,7 @@ if (P.kind === "audit") {
   // NG 이미지 행: [파일, 이미지 번호, 시간, 채널, NG 유형, 쪽]
   const NG_PAGE = 60;
   let rows = P.rows, page = 0, at = -1;
-  const url = (r) => P.origin + "/img?f=" + r[0] + "&n=" + r[1];
+  const url = (r) => P.origin + "/img?f=" + r[0] + "&n=" + r[1] + "&r=" + P.rid;
   const types = {};
   P.rows.forEach((r) => r[4].split(/\s+/).filter(Boolean).forEach((t) => (types[t] = (types[t] || 0) + 1)));
   // 유형 카드를 누르면 그 유형만, 'NG 이미지' 카드를 누르면 전체 ("장축 크기" 처럼 두 유형이 걸린 이미지는 양쪽에 다 나온다)
@@ -1318,17 +1374,35 @@ async function post(url, body) {
   if (!res.ok) throw new Error(json.error || res.statusText);
   return json;
 }
-function openRoot() {
-  const s = DATA.settings || {};
-  $("#root-input").value = s.root || "";
-  $("#cfg-path").textContent = s.config || "";
+const devList = SET.devices || [];
+const devActive = SET.device ?? -1;
+const devQ = devActive >= 0 ? "d=" + devActive : "";   // 이 화면이 보는 장비 (주소의 ?d=)
+let devEditing = null;   // 장비 설정 창에서 고치는 장비 번호. null 이면 새 장비 추가
+function openRoot(add) {
+  devEditing = add === true || devActive < 0 ? null : devActive;
+  const d = devEditing === null ? null : devList[devEditing];
+  $("#root-title").textContent = d ? "장비 설정" : "장비 추가";
+  $("#dev-name").value = d ? d.name : "";
+  $("#root-input").value = d ? d.root : "";
+  $("#dev-delete").classList.toggle("hidden", !d);
+  $("#cfg-path").textContent = SET.config || "";
   $("#root-msg").textContent = "";
-  $("#recent").innerHTML = (s.recent || []).map((p) => `<button class="btn" data-p="${esc(p)}">${esc(p)}</button>`).join("");
+  $("#recent").innerHTML = (SET.recent || []).map((p) => `<button class="btn" data-p="${esc(p)}">${esc(p)}</button>`).join("");
   $("#recent").querySelectorAll("button").forEach((b) => (b.onclick = () => ($("#root-input").value = b.dataset.p)));
   $("#m-root").classList.remove("hidden");
-  $("#root-input").focus();
+  $(d ? "#root-input" : "#dev-name").focus();
 }
-$("#btn-root").onclick = openRoot;
+/* 장비 탭: 주소(?d=)로 장비를 고른다. 사람(브라우저 탭)마다 다른 장비를 볼 수 있다.
+   한 번 읽은 장비는 바로, 처음이면 읽기부터 */
+if (DATA.live) {
+  $("#devices").innerHTML = devList.map((d, i) =>
+    `<a class="btn${i === devActive ? " on" : ""}" href="/?d=${i}" title="${esc(d.root || "")}">${esc(d.name)}</a>`).join("") +
+    (SET.admin ? '<button class="btn add" id="dev-add" title="장비 추가">+ 장비 추가</button>' : "");
+  if (SET.admin) $("#dev-add").onclick = () => openRoot(true);
+  if (devActive >= 0) document.title = devList[devActive].name + " · 계수기 리포트";
+  $("#btn-reload").href = "/?" + (devQ ? devQ + "&" : "") + "reload";
+}
+$("#btn-root").onclick = () => openRoot();
 $("#root-browse").onclick = async () => {
   const msg = $("#root-msg");
   msg.className = "msg"; msg.textContent = "이 PC 에 열린 폴더 선택 창에서 고르세요…";
@@ -1341,13 +1415,96 @@ $("#root-browse").onclick = async () => {
 $("#root-apply").onclick = async () => {
   const msg = $("#root-msg");
   msg.className = "msg"; msg.textContent = "확인 중…";
-  try { await post("/api/root", {root: $("#root-input").value}); location.href = "/"; }
+  const body = {name: $("#dev-name").value, root: $("#root-input").value};
+  if (devEditing !== null) body.index = devEditing;
+  try { const r = await post("/api/device", body); location.href = "/?d=" + r.index; }
   catch (e) { msg.className = "msg err"; msg.textContent = e.message; }
 };
+$("#dev-delete").onclick = async () => {
+  const d = devList[devEditing];
+  if (!d || !confirm(`장비 '${d.name}' 를 목록에서 지울까요?\n(PDF 와 읽은 캐시는 지우지 않습니다.)`)) return;
+  try { const r = await post("/api/device", {index: devEditing, delete: true}); location.href = r.index >= 0 ? "/?d=" + r.index : "/"; }
+  catch (e) { const msg = $("#root-msg"); msg.className = "msg err"; msg.textContent = e.message; }
+};
+$("#dev-name").onkeydown = (e) => { if (e.key === "Enter") $("#root-input").focus(); };
 $("#root-input").onkeydown = (e) => { if (e.key === "Enter") $("#root-apply").click(); };
 $("#btn-xlsx").onclick = () => {
   const perFolder = confirm("폴더(배치)별로 시트를 나눌까요?\n\n확인: 폴더별 시트 · 취소: 한 시트로 통합");
-  location.href = "/api/export.xlsx?per_folder=" + (perFolder ? 1 : 0);
+  location.href = "/api/export.xlsx?r=" + DATA.rid + "&per_folder=" + (perFolder ? 1 : 0);
+};
+
+/* 접속 허용 IP (서버 PC 에서만) */
+function accRow(a) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td><input class="acc-ip" spellcheck="false" placeholder="192.168.10.21" value="${esc(a.ip)}"></td>` +
+    `<td><input class="acc-name" placeholder="예: 품질팀 PC" value="${esc(a.name)}"></td>` +
+    '<td><button class="btn danger">삭제</button></td>';
+  tr.querySelector("button").onclick = () => tr.remove();
+  $("#acc-rows").appendChild(tr);
+  return tr;
+}
+function openAccess() {
+  const acc = SET.access || {lan: false, allow: []}, port = SET.port || location.port;
+  const on = SET.listening && SET.listening !== "127.0.0.1";
+  $("#acc-state").innerHTML = (on
+    ? '<span class="acc-on">다른 PC 접속: 켜짐</span> · 접속 주소 ' +
+      ((SET.lan || []).map((a) => `<code>http://${esc(a)}:${port}/</code>`).join(", ") || "(이 PC 의 IP 를 찾지 못했습니다)")
+    : '<span class="acc-off">다른 PC 접속: 꺼짐</span> · 지금은 이 PC 에서만 열립니다.') +
+    `<br>지금 이 화면의 접속 IP: <code>${esc(SET.ip || "")}</code>` +
+    (SET.listen_error ? `<br><span style="color:var(--alarm)">${esc(SET.listen_error)}</span>` : "");
+  $("#acc-lan").checked = !!acc.lan;
+  $("#acc-rows").innerHTML = "";
+  acc.allow.forEach(accRow);
+  if (!acc.allow.length) accRow({ip: "", name: ""});
+  const den = SET.denied || [];
+  $("#acc-denied-wrap").classList.toggle("hidden", !den.length);
+  $("#acc-denied").innerHTML = den.map((x) =>
+    `<tr><td class="hash">${esc(x.ip)}</td><td>${esc(x.last)}</td><td>${fmtN(x.count)}</td>` +
+    `<td><button class="btn" data-ip="${esc(x.ip)}">허용 목록에 넣기</button></td></tr>`).join("");
+  $("#acc-denied").querySelectorAll("[data-ip]").forEach((b) => (b.onclick = () => {
+    const empty = [...document.querySelectorAll("#acc-rows .acc-ip")].find((i) => !i.value.trim());
+    (empty || accRow({ip: "", name: ""}).querySelector(".acc-ip")).value = b.dataset.ip;
+    b.disabled = true;
+  }));
+  $("#acc-msg").textContent = "";
+  $("#m-access").classList.remove("hidden");
+}
+$("#btn-access").onclick = openAccess;
+$("#acc-add").onclick = () => accRow({ip: "", name: ""}).querySelector(".acc-ip").focus();
+$("#acc-save").onclick = async () => {
+  const msg = $("#acc-msg");
+  const allow = [...document.querySelectorAll("#acc-rows tr")].map((tr) =>
+    ({ip: tr.querySelector(".acc-ip").value.trim(), name: tr.querySelector(".acc-name").value.trim()})).filter((a) => a.ip);
+  msg.className = "msg"; msg.textContent = "저장 중…";
+  try {
+    const r = await post("/api/access", {lan: $("#acc-lan").checked, allow});
+    SET.access = {lan: $("#acc-lan").checked, allow};
+    SET.denied = (SET.denied || []).filter((x) => !allow.some((a) => a.ip === x.ip));
+    msg.textContent = "저장했습니다." + (r.restart
+      ? " '다른 PC 접속 허용' 변경은 '서버 다시 시작'을 누르면 적용됩니다." : " 바로 적용됩니다.");
+    $("#acc-restart").classList.toggle("primary", !!r.restart);
+  } catch (e) { msg.className = "msg err"; msg.textContent = e.message; }
+};
+/* 서버 다시 시작: 프로그램은 그대로, 접속받는 주소만 다시 연다 (읽은 데이터 유지). 다시 응답하면 화면을 새로 고친다 */
+$("#acc-restart").onclick = async () => {
+  const msg = $("#acc-msg");
+  if (!confirm("서버를 다시 시작할까요?\n다른 PC 의 화면은 잠깐 끊겼다가 새로 고치면 다시 열립니다. 읽은 데이터는 그대로입니다.")) return;
+  msg.className = "msg"; msg.textContent = "다시 시작하는 중…";
+  try {
+    const r = await post("/api/restart");
+    // 서버 PC 의 내부망 IP 로 들어왔는데 다른 PC 접속을 끄면 그 주소로는 못 들어오므로 127.0.0.1 로 간다
+    const base = r.host === "127.0.0.1" && !["127.0.0.1", "localhost", "[::1]"].includes(location.hostname)
+      ? `http://127.0.0.1:${location.port}` : "";
+    for (let i = 0; i < 40; i++) {
+      await new Promise((ok) => setTimeout(ok, 500));
+      try {
+        await fetch(base + "/api/status?" + devQ, {cache: "no-store", mode: base ? "no-cors" : "cors"});
+        location.href = base + "/?" + devQ;
+        return;
+      } catch (e) {}
+    }
+    msg.className = "msg err"; msg.textContent = "서버가 다시 응답하지 않습니다. 서버 PC 의 실행 창을 확인하세요.";
+  } catch (e) { msg.className = "msg err"; msg.textContent = e.message; }
 };
 document.querySelectorAll("[data-close]").forEach((b) => (b.onclick = () => b.closest(".modal").classList.add("hidden")));
 document.querySelectorAll(".modal").forEach((m) => (m.onclick = (e) => { if (e.target === m) m.classList.add("hidden"); }));
@@ -1381,21 +1538,21 @@ document.addEventListener("keydown", (e) => {
 /* ---------- 읽는 중 (serve) ---------- */
 async function poll() {
   try {
-    const s = await (await fetch("/api/status", {cache: "no-store"})).json();
-    if (!s.running) return location.replace("/");
+    const s = await (await fetch("/api/status?" + devQ, {cache: "no-store"})).json();
+    if (!s.running) return location.replace("/?" + devQ);
     $("#job-fill").style.width = s.total ? (100 * s.done / s.total).toFixed(1) + "%" : "0";
     $("#job-count").textContent = s.total ? `${fmtN(s.done)} / ${fmtN(s.total)} 파일` : `PDF 를 찾는 중… ${s.done ? fmtN(s.done) + "개" : ""}`;
     $("#job-name").textContent = s.name || "";
   } catch (e) { $("#job-count").textContent = "서버에 연결할 수 없습니다."; }
   setTimeout(poll, 500);
 }
-$("#job-cancel").onclick = async () => { await post("/api/cancel"); location.replace("/"); };
+$("#job-cancel").onclick = async () => { await post("/api/cancel", {index: devActive}); location.replace("/?" + devQ); };
 
 /* ---------- 시작 ---------- */
 if (DATA.job) {
   $("#job").classList.remove("hidden");
   $("#job-root").textContent = DATA.source;
-  document.querySelectorAll("#hbtns .btn:not(#btn-root)").forEach((b) => b.classList.add("hidden"));
+  document.querySelectorAll("#hbtns .btn:not(#btn-root):not(#btn-access):not(#btn-lab)").forEach((b) => b.classList.add("hidden"));
   $("#tabs").classList.add("hidden");
   showTab("audit");
   poll();
@@ -1407,7 +1564,7 @@ if (DATA.job) {
   try { saved = sessionStorage.getItem("auditpdf.tab") || "audit"; } catch (e) {}
   showTab(TABS.includes(saved) ? saved : "audit");
   $("#btn-xlsx").disabled = !files.length;
-  if (DATA.live && !DATA.source && !DATA.error) openRoot();
+  if (DATA.live && SET.admin && !DATA.source && !DATA.error) openRoot();
 }
 </script>
 </body>
