@@ -47,6 +47,14 @@ h1 { margin: 0; font-size: 19.8px; display: flex; align-items: center; gap: 10px
 .cats a { padding: 2px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); text-decoration: none; }
 .cats a.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .cats a[href]:hover { border-color: var(--accent); color: var(--text); }
+.cat-set { position: relative; margin-left: 10px; padding-left: 10px; border-left: 1px solid var(--line); }
+.cat-set > a { display: inline-block; }
+.set-menu { position: absolute; left: 10px; top: calc(100% + 4px); z-index: 20; display: flex; flex-direction: column; min-width: 150px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px; box-shadow: 0 6px 18px rgba(0,0,0,.14); }
+.set-menu.hidden { display: none; }
+.set-menu button { font: inherit; font-size: 12.6px; text-align: left; background: none; border: 0; border-radius: 6px; padding: 7px 12px;
+  color: var(--text); cursor: pointer; }
+.set-menu button:hover { background: var(--accent-soft); color: var(--accent); }
 .viewer-note { align-self: center; color: var(--muted); font-size: 12.6px; }
 .devices .stage { font-size: 9.9px; font-weight: 600; color: var(--ok); border: 1px solid var(--ok); border-radius: 999px; padding: 0 6px; margin-left: 6px; vertical-align: 1px; }
 .check { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13.5px; color: var(--text); }
@@ -180,7 +188,9 @@ td.phase.during { color: var(--accent); font-weight: 600; }
 <body>
 <header>
   <div>
-    <div class="cats hidden" id="cats"><a href="/">계수기</a><a class="on">중량선별기</a></div>
+    <div class="cats hidden" id="cats"><a href="/">계수기</a><a class="on">중량선별기</a>
+      <span class="cat-set hidden" id="cat-set"><a href="#" id="cat-set-btn" title="장비 추가 · 장비 설정 · 접속 허용 IP (서버 PC 에서만)">⚙ 설정 ▾</a>
+        <span class="set-menu hidden" id="set-menu"><button id="m-add">장비 추가</button><button id="m-edit">장비 설정</button><button id="m-access">접속 허용 IP</button></span></span></div>
     <h1>중량선별기 <span class="badge" id="badge">테스트</span></h1>
     <div class="devices" id="devices"></div>
     <div class="meta" id="meta"></div>
@@ -188,7 +198,6 @@ td.phase.during { color: var(--accent); font-weight: 600; }
   <div class="hbtns">
     <span class="viewer-note hidden" id="viewer-note">보기 전용</span>
     <button class="btn" id="btn-dev">장비 설정</button>
-    <a class="btn hidden" id="btn-lab" href="/lab" title="장비 추가·변경과 운영 표시는 테스트 페이지에서 (이 PC 에서만)">장비 설정 (테스트 페이지)</a>
     <button class="btn" id="btn-reload">다시 읽기</button>
     <a class="btn" id="btn-back" href="/">← 계수기 리포트 (운영)</a>
     <a class="btn" id="btn-live" href="/wc">중량선별기 운영 화면 →</a>
@@ -261,10 +270,11 @@ td.phase.during { color: var(--accent); font-weight: 600; }
 <div class="modal hidden" id="m-dev">
   <div class="sheet">
     <div class="sheet-head"><h2 id="dev-title">장비 설정</h2><button class="btn" data-close>닫기</button></div>
+    <div class="field" id="kind-field">장비 종류<div class="frow"><select id="dev-kind"><option value="counter">계수기</option><option value="wc">중량선별기</option></select></div></div>
     <div class="field">장비 이름<div class="frow"><input id="dev-name" spellcheck="false" placeholder="예: [WCM-P001]중량선별기"></div></div>
-    <div class="field">데이터 폴더 (Data, Header 등이 들어 있는 폴더)
+    <div class="field"><span id="root-label">데이터 폴더 (Data, Header 등이 들어 있는 폴더)</span>
       <div class="frow"><input id="dev-root" spellcheck="false" placeholder="예: C:\#Inbox\WC"><button class="btn" id="dev-browse">찾아보기…</button></div></div>
-    <label class="check"><input type="checkbox" id="dev-live"> 운영 화면에 표시 <span class="note">(켜면 운영 화면 /wc 와 허용된 다른 PC 에서 보기 전용으로 보입니다)</span></label>
+    <label class="check" id="live-field"><input type="checkbox" id="dev-live"> 운영 화면에 표시 <span class="note">(켜면 운영 화면 /wc 와 허용된 다른 PC 에서 보기 전용으로 보입니다)</span></label>
     <div class="msg" id="dev-msg"></div>
     <div class="frow end"><button class="btn danger grow" id="dev-delete">장비 삭제</button><button class="btn primary" id="dev-apply">적용</button></div>
   </div>
@@ -279,7 +289,7 @@ const fmtN = (n) => n == null ? "" : Number(n).toLocaleString("ko-KR");
 const fmtF = (n, d) => n == null ? "" : Number(n).toFixed(d);
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const dq = "d=" + SET.device;
-const BASE = SET.base || "/lab", LIVE = !!SET.live;   // 운영 화면(/wc)이면 LIVE: 보기 전용, 장비 관리는 테스트 페이지에서
+const BASE = SET.base || "/lab", LIVE = !!SET.live;   // 운영 화면(/wc)이면 LIVE: 보기 전용 (장비 관리는 서버 PC 의 ⚙ 설정 메뉴)
 let D = null, tab = "runs";
 
 async function post(url, body) {
@@ -300,14 +310,18 @@ document.title = (SET.device >= 0 ? devs[SET.device].name + " · " : "") + (LIVE
 if (LIVE) {   // 운영 화면: 테스트 표시를 빼고, 장비 관리 · 다시 읽기는 서버 PC(관리자)만
   ["#badge", "#notice", "#btn-dev", "#btn-back", "#btn-live"].forEach((s) => $(s).classList.add("hidden"));
   $("#cats").classList.remove("hidden");
-  $("#btn-lab").classList.toggle("hidden", !SET.admin);
   $("#btn-reload").classList.toggle("hidden", !SET.admin);
   $("#viewer-note").classList.toggle("hidden", !!SET.admin);
+  $("#cat-set").classList.toggle("hidden", !SET.admin);
 } else $("#btn-live").classList.toggle("hidden", !devs.some((d) => d.stage === "live"));
 let editing = null;
 function openDev(add) {
-  editing = add || SET.device < 0 ? null : SET.device;
+  editing = add || SET.device < 0 ? null : SET.device;   // 이 화면 목록의 번호
   const d = editing === null ? null : devs[editing];
+  $("#kind-field").classList.toggle("hidden", !LIVE || !!d);   // 운영 화면에서 새로 추가할 때만 종류를 고른다
+  $("#live-field").classList.toggle("hidden", LIVE);            // 운영 화면에서 추가·변경한 장비는 늘 운영 표시
+  $("#dev-kind").value = "wc";
+  kindChanged();
   $("#dev-title").textContent = d ? "장비 설정" : "장비 추가";
   $("#dev-name").value = d ? d.name : "";
   $("#dev-root").value = d ? d.root : "";
@@ -318,6 +332,21 @@ function openDev(add) {
   $(d ? "#dev-root" : "#dev-name").focus();
 }
 if (!LIVE) $("#dev-add").onclick = () => openDev(true);
+const isCounter = () => LIVE && editing === null && $("#dev-kind").value === "counter";
+function kindChanged() {
+  const c = isCounter();
+  $("#root-label").textContent = c ? "PDF 루트 폴더" : "데이터 폴더 (Data, Header 등이 들어 있는 폴더)";
+  $("#dev-name").placeholder = c ? "예: [COU-P004]24열계수기" : "예: [WCM-P001]중량선별기";
+  $("#dev-root").placeholder = c ? "" : "예: C:\\#Inbox\\WC";
+  $("#dev-msg").textContent = "";
+}
+$("#dev-kind").onchange = kindChanged;
+/* 운영 화면의 ⚙ 설정 메뉴 (서버 PC 에서만) */
+$("#cat-set-btn").onclick = (e) => { e.preventDefault(); e.stopPropagation(); $("#set-menu").classList.toggle("hidden"); };
+document.addEventListener("click", () => $("#set-menu").classList.add("hidden"));
+$("#m-add").onclick = () => openDev(true);
+$("#m-edit").onclick = () => openDev(false);
+$("#m-access").onclick = () => (location.href = "/?access");   // 접속 허용 IP 창은 계수기 화면에 있다
 $("#btn-dev").onclick = () => openDev(false);
 $("#dev-browse").onclick = async () => {
   const msg = $("#dev-msg");
@@ -326,16 +355,25 @@ $("#dev-browse").onclick = async () => {
   catch (e) { msg.className = "msg err"; msg.textContent = e.message; }
 };
 $("#dev-apply").onclick = async () => {
-  const msg = $("#dev-msg"), body = {name: $("#dev-name").value, root: $("#dev-root").value, live: $("#dev-live").checked};
-  if (editing !== null) body.index = editing;
+  const msg = $("#dev-msg"), body = {name: $("#dev-name").value, root: $("#dev-root").value, live: LIVE || $("#dev-live").checked};
   msg.className = "msg"; msg.textContent = "확인 중…";
-  try { const r = await post("/lab/api/device", body); location.href = "/lab?d=" + r.index; }
+  if (isCounter()) {   // 계수기 추가
+    try { const r = await post("/api/device", {name: body.name, root: body.root}); location.href = "/?d=" + r.index; }
+    catch (e) { msg.className = "msg err"; msg.textContent = e.message; }
+    return;
+  }
+  if (editing !== null) body.index = LIVE ? devs[editing].i : editing;
+  // 운영 화면: 고친 장비는 그 자리, 새 장비는 목록 끝
+  try { const r = await post("/lab/api/device", body); location.href = LIVE ? BASE + "?d=" + (editing ?? devs.length) : "/lab?d=" + r.index; }
   catch (e) { msg.className = "msg err"; msg.textContent = e.message; }
 };
 $("#dev-delete").onclick = async () => {
   const d = devs[editing];
-  if (!d || !confirm(`테스트 장비 '${d.name}' 를 목록에서 지울까요?\n(데이터 파일은 지우지 않습니다.)`)) return;
-  try { const r = await post("/lab/api/device", {index: editing, delete: true}); location.href = r.index >= 0 ? "/lab?d=" + r.index : "/lab"; }
+  if (!d || !confirm(`장비 '${d.name}' 를 목록에서 지울까요?\n(데이터 파일은 지우지 않습니다.)`)) return;
+  try {
+    const r = await post("/lab/api/device", {index: LIVE ? d.i : editing, delete: true});
+    location.href = LIVE ? BASE : r.index >= 0 ? "/lab?d=" + r.index : "/lab";
+  }
   catch (e) { $("#dev-msg").className = "msg err"; $("#dev-msg").textContent = e.message; }
 };
 $("#dev-name").onkeydown = (e) => { if (e.key === "Enter") $("#dev-root").focus(); };
@@ -923,7 +961,7 @@ async function load(reload) {
   if (SET.device < 0) {
     if (LIVE) {
       $("#loading").textContent = "운영 화면에 올린 중량선별기 장비가 없습니다." +
-        (SET.admin ? " 테스트 페이지의 '장비 설정'에서 '운영 화면에 표시'를 켜세요." : " 관리자에게 문의하세요.");
+        (SET.admin ? " 위의 '⚙ 설정 → 장비 추가'에서 등록하세요." : " 관리자에게 문의하세요.");
       return;
     }
     $("#loading").textContent = "중량선별기 장비가 없습니다. '+ 장비 추가'로 장비 이름과 데이터 폴더를 등록하세요.";

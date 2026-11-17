@@ -34,7 +34,7 @@ class Lab:
     @staticmethod
     def device(q, live):
         """(이 화면의 장비 목록, 고른 번호). 운영 화면은 stage 가 live 인 장비만."""
-        devs = [x for x in wc_devices() if not live or x["stage"] == "live"]
+        devs = [{**x, "i": i} for i, x in enumerate(wc_devices()) if not live or x["stage"] == "live"]
         try:
             d = int(q.get("d", ["0"])[0])
         except ValueError:
@@ -59,7 +59,7 @@ class Lab:
         sub = path[len(base):]
         devs, d = self.device(q, live)
         if sub in ("", "/run", "/audit"):
-            s = {"devices": [{"name": x["name"], "stage": x["stage"], **({"root": x["root"]} if admin else {})} for x in devs],
+            s = {"devices": [{"name": x["name"], "stage": x["stage"], **({"root": x["root"], "i": x["i"]} if admin else {})} for x in devs],
                  "device": d, "admin": admin, "live": live, "base": base}
             if sub == "/run":     # 같은 화면 파일을 그래프 하나만 보이는 모양으로 연다
                 s["run"] = int(q.get("f", ["-1"])[0])
