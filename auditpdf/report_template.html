@@ -279,6 +279,7 @@ tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
     <div class="filters">
       <label>시작일<input type="date" id="f-start"></label>
       <label>종료일<input type="date" id="f-end"></label>
+      <label class="machine-pick">장비<select id="f-machine"><option value="">전체</option></select></label>
       <label>배치<select id="f-file"><option value="">전체</option></select></label>
       <label>사용자<select id="f-user"><option value="">전체</option></select></label>
       <label>검색<input type="search" id="f-q" placeholder="로그 · 사용자 · 시간"></label>
@@ -294,6 +295,7 @@ tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 
   <section id="v-files" class="hidden">
     <div class="filters">
+      <label class="machine-pick">장비<select id="g-machine"><option value="">전체</option></select></label>
       <label>검색<input type="search" id="g-q" placeholder="폴더 · 파일명"></label>
       <label class="inline"><input type="checkbox" id="g-bad"> 문제 있는 파일만</label>
     </div>
@@ -306,6 +308,7 @@ tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
     <div class="filters">
       <label>시작일 (이후)<input type="date" id="b-start"></label>
       <label>종료일 (이전)<input type="date" id="b-end"></label>
+      <label class="machine-pick">장비<select id="b-machine"><option value="">전체</option></select></label>
       <label>레시피<select id="b-recipe"><option value="">전체</option></select></label>
       <label>검색<input type="search" id="b-q" placeholder="배치 · 레시피 · 사용자 · 폴더"></label>
       <label class="inline"><input type="checkbox" id="b-nobatch"> 배치 리포트 없는 배치만</label>
@@ -559,6 +562,15 @@ const toggled = new Set();                // '상세 모두 펼치기' 와 반�
 const batchLabel = (f) => fileMeta(f, "BATCH NUMBER") || f[FILE.folder];
 const uniq = (xs) => [...new Set(xs.filter((x) => x !== "" && x != null))]
   .sort((a, b) => typeof a === "number" && typeof b === "number" ? a - b : koCompare(String(a), String(b)));
+/* 장비(호기) 구분: 24열 계수기처럼 한 장비 폴더에 12열 계수기 두 대(COU-P004A, COU-P004B)의 리포트가 섞여 있으면
+   각 탭 필터 줄에 '장비' 선택을 보이고, 배치 표·그래프 제목에 호기를 적는다. 한 대뿐이면 선택은 숨긴다 */
+const machineOf = (fi) => fileMeta(files[fi], "MACHINE ID");
+const machines = uniq(files.map((f, i) => f[FILE.dup] ? "" : machineOf(i)));
+(function fillMachines() {
+  for (const id of ["#f-machine", "#g-machine", "#b-machine"])
+    machines.forEach((m) => $(id).add(new Option(m, m)));
+  document.querySelectorAll(".machine-pick").forEach((el) => el.classList.toggle("hidden", machines.length < 2));
+})();
 (function fillSelects() {
   // 배치 선택: 그 종류의 리포트 파일 (내용이 있는 것만)
   const fileOpts = (sel, kind) => files.forEach((f, i) => {
@@ -626,10 +638,10 @@ const AUDIT_COLS = [
 
 function filterAudit() {
   query = $("#f-q").value.trim();
-  const q = query.toLowerCase(), file = $("#f-file").value, user = $("#f-user").value;
+  const q = query.toLowerCase(), file = $("#f-file").value, user = $("#f-user").value, mach = $("#f-machine").value;
   const start = $("#f-start").value, end = $("#f-end").value, alarm = $("#f-alarm").checked;
   aRows = audit.filter((r) =>
-    (file === "" || r[A.file] === +file) && (!user || r[A.user] === user) && (!alarm || r[A.color]) &&
+    (file === "" || r[A.file] === +file) && (!mach || machineOf(r[A.file]) === mach) && (!user || r[A.user] === user) && (!alarm || r[A.color]) &&
     (!start || dateOf(r[A.time]) >= start) && (!end || dateOf(r[A.time]) <= end) &&
     (!q || r[A.log].toLowerCase().includes(q) || r[A.user].toLowerCase().includes(q) || r[A.time].includes(q) || detailMatch(r, q)));
   if (aSel && !aRows.includes(aSel)) aSel = null;   // 고른 행이 필터로 빠지면 선택도 푼다
@@ -714,11 +726,18 @@ function openPdfWindow(fi, page) {
 }
 
 for (const id of ["#f-file", "#f-user", "#f-start", "#f-end", "#f-alarm"]) $(id).onchange = filterAudit;
+$("#f-machine").onchange = () => {   // 배치 선택 목록을 그 장비의 배치로 줄인다 (고른 배치가 다른 장비면 '전체')
+  const m = $("#f-machine").value;
+  [...$("#f-file").options].forEach((o) => (o.hidden = !!o.value && !!m && machineOf(+o.value) !== m));
+  if ($("#f-file").selectedOptions[0]?.hidden) $("#f-file").value = "";
+  filterAudit();
+};
 $("#f-open").onchange = () => { toggled.clear(); drawAudit(); };
 let qTimer;
 $("#f-q").oninput = () => { clearTimeout(qTimer); qTimer = setTimeout(filterAudit, 200); };
 function resetAudit() {
-  $("#f-q").value = $("#f-file").value = $("#f-user").value = $("#f-start").value = $("#f-end").value = "";
+  $("#f-q").value = $("#f-file").value = $("#f-user").value = $("#f-start").value = $("#f-end").value = $("#f-machine").value = "";
+  [...$("#f-file").options].forEach((o) => (o.hidden = false));
   $("#f-alarm").checked = false;
 }
 $("#f-reset").onclick = () => { resetAudit(); filterAudit(); };
@@ -745,6 +764,7 @@ const FILE_COLS = [
   {label: "폴더", get: (f) => f[FILE.folder]},
   {label: "파일명", get: (f) => f[FILE.name]},
   {label: "종류", get: (f) => KIND[f[FILE.kind]] || f[FILE.kind]},
+  {label: "장비", get: (f) => fileMeta(f, "MACHINE ID")},
   {label: "상태", get: (f) => f[FILE.status], cls: (f) => f[FILE.status] === "OK" ? "good" : f[FILE.dup] ? "muted" : "bad",
    html: (f) => f[FILE.dup] ? `<span title="같은 내용: #${f[FILE.dup]} ${esc(files[f[FILE.dup] - 1][FILE.folder])}">중복 (#${f[FILE.dup]})</span>` : esc(f[FILE.status])},
   {label: "쪽", get: (f) => f[FILE.pages], num: true},
@@ -758,8 +778,8 @@ const FILE_COLS = [
 ];
 
 function drawFiles() {
-  const q = $("#g-q").value.trim().toLowerCase(), bad = $("#g-bad").checked;
-  const rows = files.filter((f) => (!bad || problem(f)) &&
+  const q = $("#g-q").value.trim().toLowerCase(), bad = $("#g-bad").checked, mach = $("#g-machine").value;
+  const rows = files.filter((f) => (!bad || problem(f)) && (!mach || fileMeta(f, "MACHINE ID") === mach) &&
     (!q || f[FILE.folder].toLowerCase().includes(q) || f[FILE.name].toLowerCase().includes(q)));
   const nFail = files.filter((f) => f[FILE.failed]).length, nEmpty = files.filter((f) => !f[FILE.failed] && !f[FILE.rows]).length;
   const nDup = files.filter((f) => f[FILE.dup]).length;
@@ -799,7 +819,7 @@ function openFile(i) {
 }
 let gqTimer;
 $("#g-q").oninput = () => { clearTimeout(gqTimer); gqTimer = setTimeout(drawFiles, 150); };
-$("#g-bad").onchange = drawFiles;
+$("#g-bad").onchange = $("#g-machine").onchange = drawFiles;
 
 /* ---------- 배치 (폴더 하나 = 배치 하나, 배치 리포트 요약과 생산 결과) ---------- */
 const B = {folder: 0, meta: 1, summary: 2, trials: 3, kinds: 4};
@@ -815,6 +835,7 @@ const BATCH_COLS = [
   {label: "종료", get: (b) => bMeta(b, "BATCH STOP TIME"), cls: "mono"},
   {label: "레시피", get: (b) => bMeta(b, "RECIPE NAME")},
   {label: "배치 번호", get: (b) => bMeta(b, "BATCH NUMBER") || b[B.folder]},
+  {label: "장비", get: (b) => bMeta(b, "MACHINE ID")},
   {label: "목표", get: (b) => numOr(bSum(b, "TARGET PRODUCTION BOTTLE COUNT")), num: true},
   {label: "총수량", get: (b) => kindCount(b, "bottle", nBottle), num: true},   // 병 계수 기록 행 수
   {label: "양품[병]", get: (b) => numOr(bSum(b, "PASSED BOTTLE COUNT")), num: true},
@@ -825,10 +846,10 @@ const BATCH_COLS = [
   {label: "생산 횟수", get: (b) => b[B.trials].length, num: true},
 ];
 // 기본 열 너비(px). 순서는 BATCH_COLS 와 같다. 표가 이 너비만 쓰고 남는 폭은 오른쪽 그래프 칸이 쓴다.
-const BATCH_WIDTHS = [190, 190, 300, 143, 73, 95, 102, 106, 106, 90, 110, 115];
+const BATCH_WIDTHS = [190, 190, 300, 143, 110, 73, 95, 102, 106, 106, 90, 110, 115];
 // 열 순서를 바꾸기 전에 저장한 너비는 순서를 맞춰 준다 (각각 한 번만)
 //  v2: '생산 횟수' 를 맨 끝으로.  v3: '로그'(8) 자리에 '총수량'(9) 을 앞으로, '로그' 는 '알람 횟수' 로.
-//  v4: '총수량'(8) 을 '목표'(4) 바로 오른쪽(5)으로.
+//  v4: '총수량'(8) 을 '목표'(4) 바로 오른쪽(5)으로.  v5: '배치 번호'(3) 오른쪽(4)에 '장비' 열을 넣는다.
 try {
   const key = "auditpdf.colw.t-batch";
   let w = JSON.parse(localStorage.getItem(key));
@@ -836,17 +857,19 @@ try {
     if (!localStorage.getItem(key + ".v2")) w = w.slice(0, 8).concat(w.slice(9), [w[8]]);
     if (!localStorage.getItem(key + ".v3")) w = w.slice(0, 8).concat([w[9], w[8]], w.slice(10));
     if (!localStorage.getItem(key + ".v4")) w = w.slice(0, 5).concat([w[8]], w.slice(5, 8), w.slice(9));
+    if (!localStorage.getItem(key + ".v5")) w = w.slice(0, 4).concat([110], w.slice(4));
     localStorage.setItem(key, JSON.stringify(w));
   }
   localStorage.setItem(key + ".v2", "1");
   localStorage.setItem(key + ".v3", "1");
   localStorage.setItem(key + ".v4", "1");
+  localStorage.setItem(key + ".v5", "1");
 } catch (e) {}
 
 function drawBatch() {
   const q = $("#b-q").value.trim().toLowerCase(), noBatch = $("#b-nobatch").checked, recipe = $("#b-recipe").value;
-  const inRange = dateFilter();
-  const rows = batchList.filter((b) => (!noBatch || b[B.kinds].batch === undefined) &&
+  const inRange = dateFilter(), mach = $("#b-machine").value;
+  const rows = batchList.filter((b) => (!noBatch || b[B.kinds].batch === undefined) && (!mach || bMeta(b, "MACHINE ID") === mach) &&
     (!recipe || bMeta(b, "RECIPE NAME") === recipe) && inRange(b) &&
     (!q || [b[B.folder], ...b[B.meta], ...b[B.summary]].some((v) => String(v).toLowerCase().includes(q))));
   const sum = (k) => rows.reduce((s, b) => s + (+bSum(b, k) || 0), 0);
@@ -889,13 +912,15 @@ function dateFilter() {
    고른 레시피가 그 기간에 없으면 '전체' 로 돌린다 */
 function fillRecipes() {
   const sel = $("#b-recipe"), cur = sel.value, inRange = dateFilter(), n = {};
-  batchList.forEach((b) => { const r = bMeta(b, "RECIPE NAME"); if (r && inRange(b)) n[r] = (n[r] || 0) + 1; });
+  const mach = $("#b-machine").value;
+  batchList.forEach((b) => { const r = bMeta(b, "RECIPE NAME"); if (r && inRange(b) && (!mach || bMeta(b, "MACHINE ID") === mach)) n[r] = (n[r] || 0) + 1; });
   sel.innerHTML = `<option value="">전체</option>` + Object.keys(n).sort(koCompare)
     .map((r) => `<option value="${esc(r)}">${esc(r)} (${fmtN(n[r])})</option>`).join("");
   sel.value = n[cur] ? cur : "";
 }
 fillRecipes();
 $("#b-recipe").onchange = drawBatch;
+$("#b-machine").onchange = () => { fillRecipes(); drawBatch(); };
 $("#b-start").onchange = $("#b-end").onchange = () => { fillRecipes(); drawBatch(); };
 
 /* 배치 행 선택 → 오른쪽 위 그래프 */
@@ -903,7 +928,8 @@ let selBatch = null;
 function selectBatch(b) {
   selBatch = b;
   markBatch(b);
-  $("#b-chart-title").textContent = [bMeta(b, "RECIPE NAME"), bMeta(b, "BATCH NUMBER") || b[B.folder]].filter(Boolean).join(" · ");
+  $("#b-chart-title").textContent = [machines.length > 1 && bMeta(b, "MACHINE ID"), bMeta(b, "RECIPE NAME"),
+    bMeta(b, "BATCH NUMBER") || b[B.folder]].filter(Boolean).join(" · ");
   // 제목 오른쪽: 총수량(병 계수 기록 행 수), 총양품, 총불량 (배치 리포트 요약 값)
   const stat = (v, label, cls = "") => `<div class="stat${cls}"><b>${v === "" ? "-" : fmtN(v)}</b><span>${label}</span></div>`;
   $("#b-stats").innerHTML = stat(kindCount(b, "bottle", nBottle), "총수량") +

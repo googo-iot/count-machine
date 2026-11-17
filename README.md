@@ -29,17 +29,20 @@ pip install pdfplumber openpyxl
 python -m auditpdf serve
 
 #   장비: 제목 아래 장비 탭(예: [COU-P001]12열계수기, [COU-P004]24열계수기)을 눌러 장비별 PDF 폴더를 본다.
-#         '+ 장비 추가' → 장비 이름과 PDF 루트 폴더(경로 입력 또는 '찾아보기…') → 적용.
-#         '장비 설정' → 지금 장비의 이름·폴더를 고치거나 목록에서 지운다 (PDF 와 캐시는 지우지 않는다).
+#         장비 관리는 맨 위 카테고리 탭 옆 '⚙ 설정' 메뉴 (서버 PC 에서만). 계수기 · 중량선별기 화면 모두 같은 메뉴.
+#           '장비 추가' → 장비 종류(계수기 / 중량선별기), 장비 이름, 폴더(경로 입력 또는 '찾아보기…') → 적용.
+#             계수기는 PDF 루트 폴더, 중량선별기는 데이터 폴더(Data, Header 등이 들어 있는 폴더).
+#           '장비 설정' → 지금 보고 있는 장비의 이름·폴더를 고치거나 목록에서 지운다 (원본 파일과 캐시는 지우지 않는다).
+#           '접속 허용 IP' → 아래 '다른 PC 에서 보기' 참고 (중량선별기 화면에서 누르면 계수기 화면에서 열린다).
 #         한 번 다 읽은 장비는 메모리에 두어 탭을 다시 누르면 바로 보인다. 새로 읽으려면 '다시 읽기'.
 #         장비를 바꾸기 전에 연 PDF·NG 이미지 팝업은 다시 열어야 한다 (다른 장비의 파일을 잘못 보여 주지 않도록 막는다).
 #   다른 PC 에서 보기 (내부망, 몇 명 이내):
-#         서버 PC 의 뷰어에서 '접속 허용 IP' → '다른 PC 접속 허용' 켜기 + 접속할 PC 의 IP(또는 /24 이하 대역) 등록 → 저장.
+#         서버 PC 의 뷰어에서 '⚙ 설정' → '접속 허용 IP' → '다른 PC 접속 허용' 켜기 + 접속할 PC 의 IP(또는 /24 이하 대역) 등록 → 저장.
 #         '다른 PC 접속 허용' 을 켜고 끄는 것은 같은 창의 '서버 다시 시작' 버튼으로 적용한다. IP 목록은 저장하면 바로 적용.
 #         (다시 시작은 접속받는 주소만 다시 열고 읽은 데이터는 그대로 둔다. 실행할 때 --host 0.0.0.0 으로도 켤 수 있다.)
 #         다른 PC 는 http://<서버 PC IP>:8766/ 으로 접속한다. 목록에 없는 PC 는 거절되고 '최근 거부된 접속' 에 남아 바로 등록할 수 있다.
 #         허용된 PC 는 보기 전용: 장비 탭 · 검색 · PDF 원본 · NG 이미지 · Excel/CSV 저장.
-#         장비 설정 · 다시 읽기 · 중지 · 접속 허용 IP 는 서버 PC 에서만 (127.0.0.1 또는 서버 PC 자신의 IP 로 접속).
+#         '⚙ 설정' 메뉴(장비 추가 · 장비 설정 · 접속 허용 IP) · 다시 읽기 · 중지는 서버 PC 에서만 (127.0.0.1 또는 서버 PC 자신의 IP 로 접속).
 #         보는 장비는 주소(/?d=번호)로 정해 사람마다 다른 장비를 동시에 볼 수 있다.
 #         서버 PC 의 Windows 방화벽에서 TCP 8766 인바운드를 허용해야 한다 (예: 관리자 PowerShell 에서
 #           New-NetFirewallRule -DisplayName "계수기 리포트 뷰어" -Direction Inbound -Protocol TCP -LocalPort 8766 -RemoteAddress <허용 IP들> -Action Allow).
@@ -48,8 +51,10 @@ python -m auditpdf serve
 #
 #   중량선별기 운영 화면 (http://<서버>:8766/wc): 화면 맨 위 카테고리 탭(계수기 / 중량선별기)으로 오간다.
 #     ITC81DB 계열 CSV (예: C:\#Inbox\WC). 허용 IP 의 다른 PC 는 보기 전용, 다시 읽기는 서버 PC 에서만.
-#   테스트 페이지 (http://127.0.0.1:8766/lab, 서버 PC 에서만): 중량선별기 장비 추가·변경·삭제.
-#     장비 설정의 '운영 화면에 표시'를 켠 장비만 /wc 와 다른 PC 에 보인다 (config.json 의 wc_devices, stage=live).
+#     장비 추가 · 변경 · 삭제는 '⚙ 설정' 메뉴에서 (위 '장비' 참고). 추가한 장비는 바로 /wc 에 보인다
+#     (config.json 의 wc_devices, stage=live).
+#   (예전 테스트 페이지 http://127.0.0.1:8766/lab 은 화면에서 버튼을 뺐다. 주소로는 아직 열리며, stage=test 장비를 보거나
+#    '운영 화면에 표시'를 끄고 켤 때만 쓴다.)
 #     검사 (런): Data\Inspection 의 I날짜-품목.csv 하나가 한 런. 계량 수, Pass/Under/Over/Double, 불량률, 평균·표준편차,
 #               기준 변경 횟수. 행 클릭 → 중량 추이 그래프 (판정별 색, Under/Pass/Over 기준선). 주소 끝 #run=번호 로 바로 열기.
 #     이력: Data\History 의 H날짜.csv (감사 추적). 유형·이벤트·사용자·기간 필터, Alarm 강조.
@@ -117,7 +122,7 @@ COU-P002 공유 폴더(배치 146개, PDF 584건)는 처음 약 40분, 그 뒤�
 | [auditpdf/scan.py](auditpdf/scan.py) | 파일명 규칙, 폴더 탐색, PDF 별 결과·해시, 메모리/디스크 캐시 |
 | [auditpdf/excel.py](auditpdf/excel.py) | Excel / CSV |
 | [auditpdf/server.py](auditpdf/server.py) | 뷰어 서버 (장비별 결과, 접속 허용 IP, NG 이미지 `/img`) |
-| [auditpdf/lab.py](auditpdf/lab.py) · [wc_template.html](auditpdf/wc_template.html) | 중량선별기 화면: 운영 `/wc` (보기 전용) · 테스트 `/lab` (서버 PC 전용, 장비 관리) |
+| [auditpdf/lab.py](auditpdf/lab.py) · [wc_template.html](auditpdf/wc_template.html) | 중량선별기 화면: 운영 `/wc` (보기 전용, 서버 PC 는 ⚙ 설정 메뉴로 장비 관리) · 예전 테스트 `/lab` (서버 PC 전용) |
 | [auditpdf/wc.py](auditpdf/wc.py) | 중량선별기 CSV 읽기 (검사 기록 · 이력 · 통계 · 알람 백업) |
 | [auditpdf/report_template.html](auditpdf/report_template.html) | 화면 (데이터를 JSON 으로 넣어 파일 하나로도 동작) |
 | [auditpdf/config.py](auditpdf/config.py) | 설정 파일, 폴더 선택 창 |
