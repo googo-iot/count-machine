@@ -105,7 +105,12 @@ td.ng { color: var(--alarm); font-weight: 600; }
 .legend i.vline { border-radius: 0; width: 2px; height: 14px; vertical-align: -2px; }
 .chart .tip .hi { color: var(--lim-hi); } .chart .tip .lo { color: var(--lim-lo); } .chart .tip .ps { color: var(--ok); }
 .chart .tip .chg { color: var(--change); }
-.chart { position: relative; user-select: none; }
+.chart { position: relative; user-select: none; border: 1px solid var(--line); background: var(--panel); }   /* 그래프 테두리 */
+.seg-bar { margin-top: 8px; }
+.seg-bar .seg-btn { background: #c62828; border-color: #c62828; color: #fff; font-weight: 700; }   /* 눈에 띄게 */
+.seg-bar .seg-btn:hover { filter: brightness(1.1); }
+.seg-bar .seg-btn .arr { display: inline-block; width: 1em; color: #fff; }
+.seg-bar .seg-btn.on { filter: brightness(.9); }
 .chart canvas { display: block; width: 100%; cursor: grab; touch-action: none; }
 .chart canvas.drag { cursor: grabbing; }
 /* 구간 측정: 점 두 개를 눌러 그 사이 시간 간격 */
@@ -159,6 +164,15 @@ body.runmode > header, body.runmode > .notice, body.runmode > nav, body.runmode 
 #run-view .stat { padding: 6px 12px; min-width: 78px; }
 #run-view .summary { gap: 8px; }
 #run-view .stat b { font-size: 15.3px; }
+/* 그래프 창 위 수치 칸: 판정별 바탕색 (밝은 · 어두운 화면 같은 색, 글자는 대비가 큰 흰색 / 노랑 칸만 진한 글자) */
+#run-view .stat.t-pass  { background: #1a7f37; border-color: #1a7f37; }
+#run-view .stat.t-under { background: #1f6feb; border-color: #1f6feb; }
+#run-view .stat.t-red   { background: #c62828; border-color: #c62828; }
+#run-view .stat.t-base  { background: #455a64; border-color: #455a64; }   /* 총 작업시간 · 계량: 판정 색과 겹치지 않는 진한 청회색 */
+#run-view .stat.t-dbl   { background: #e0a800; border-color: #e0a800; }   /* 흰 글자가 읽히도록 조금 진한 노랑 */
+#run-view .stat[class*=" t-"] b { color: #fff; }
+#run-view .stat[class*=" t-"] span { color: rgba(255, 255, 255, .9); }
+#run-view .stat.t-dbl b, #run-view .stat.t-dbl span { text-shadow: 0 1px 1px rgba(0, 0, 0, .35); }
 #run-view .summary { align-items: center; }
 #run-view .audit-btn { margin-left: auto; align-self: stretch; padding: 6px 16px; font-weight: 600; }
 #run-view .audit-btn .count { font-weight: 400; color: var(--muted); margin-left: 4px; }
@@ -169,8 +183,11 @@ tr.outside td { color: var(--muted); }
 td.phase { white-space: nowrap; font-size: 11.7px; }
 td.phase.during { color: var(--accent); font-weight: 600; }
 /* 검사 내용 표: 기준 구간(기준 변경)마다 한 줄 */
-.seg-table { width: auto; min-width: 0; margin: 2px 0 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+.seg-table { width: auto; min-width: 0; margin: 10px 0 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
   border-collapse: separate; border-spacing: 0; overflow: hidden; font-size: 12.6px; }
+#t-runs th.sortable { cursor: pointer; user-select: none; }   /* 검사 (런) 표: 머리글을 누르면 정렬 */
+#t-runs th.sortable:hover { color: var(--accent); }
+#t-runs th .arrow { margin-left: 3px; color: var(--accent); font-size: 10px; }
 .seg-table th { position: static; padding: 4px 12px; font-size: 11.7px; }
 .seg-table td { padding: 4px 12px; font-variant-numeric: tabular-nums; }
 .seg-table tr:last-child td { border-bottom: 0; }
@@ -409,10 +426,47 @@ const R = {file: 0, date: 1, start: 2, end: 3, pno: 4, name: 5, lot: 6, n: 7, pa
            ng: 13, mean: 14, sd: 15, min: 16, max: 17, changes: 18, limits: 19, first: 20};
 const fmtLim = (l) => (l || []).map((v) => fmtF(v, 1)).join(" / ");
 let rRows = [], rPage = 0, rSel = null;
+/* 머리글 정렬: 누를 때마다 오름차순 → 내림차순 → 원래 순서(최근 런이 위). 키 순서는 표의 열 순서와 같다 (그래프 열은 정렬 없음) */
+const runFirst = (r) => r[R.first] && r[R.first].length ? r[R.first] : r[R.limits] || [];
+const workSec = (r) => { const t = workTime(r); if (!t) return null; const [h, m, s] = t.split(":").map(Number); return h * 3600 + m * 60 + s; };
+const RUN_KEYS = [null, (r) => r[R.date] + " " + r[R.start], (r) => r[R.start], (r) => r[R.end], workSec,
+  (r) => r[R.pno], (r) => r[R.name], (r) => r[R.lot], (r) => r[R.n], (r) => r[R.pass], (r) => r[R.under], (r) => r[R.over],
+  (r) => r[R.dbl], (r) => r[R.ng], (r) => r[R.mean], (r) => r[R.sd], (r) => r[R.min], (r) => r[R.max], (r) => r[R.changes] || 0, runFirst];
+let rSort = {col: -1, dir: 1};
+const cmpVal = (a, b) => {
+  const empty = (v) => v === null || v === undefined || v === "" || (typeof v === "number" && isNaN(v));
+  if (empty(a) || empty(b)) return empty(a) - empty(b);   // 빈 값은 방향과 상관없이 맨 아래 (아래에서 처리)
+  if (Array.isArray(a)) { for (let i = 0; i < Math.max(a.length, b.length); i++) { const c = cmpVal(a[i], b[i]); if (c) return c; } return 0; }
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  return String(a).localeCompare(String(b), "ko", {numeric: true});
+};
+function sortRuns() {
+  if (rSort.col < 0) return;
+  const key = RUN_KEYS[rSort.col], empty = (v) => v === null || v === undefined || v === "";
+  rRows = rRows.map((r, i) => [key(r), i, r]).sort((x, y) =>
+    empty(x[0]) || empty(y[0]) ? empty(x[0]) - empty(y[0]) || x[1] - y[1] : rSort.dir * cmpVal(x[0], y[0]) || x[1] - y[1]).map((x) => x[2]);
+}
+function markSort() {
+  $("#t-runs thead").querySelectorAll("th").forEach((th, i) => {
+    th.querySelector(".arrow")?.remove();
+    if (i === rSort.col) th.insertAdjacentHTML("beforeend", `<span class="arrow">${rSort.dir > 0 ? "▲" : "▼"}</span>`);
+  });
+}
+$("#t-runs thead").querySelectorAll("th").forEach((th, i) => {
+  if (!RUN_KEYS[i]) return;
+  th.classList.add("sortable");
+  th.title = (th.title ? th.title + "\n" : "") + "누르면 정렬 (오름차순 → 내림차순 → 원래 순서)";
+  th.onclick = () => {
+    rSort = rSort.col !== i ? {col: i, dir: 1} : rSort.dir > 0 ? {col: i, dir: -1} : {col: -1, dir: 1};
+    filterRuns();
+  };
+});
 function filterRuns() {
   const from = $("#r-from").value, to = $("#r-to").value, q = $("#r-q").value.trim().toLowerCase();
   rRows = D.runs.filter((r) => inRange(r[R.date], from, to) &&
     (!q || [r[R.name], r[R.lot], r[R.pno]].join(" ").toLowerCase().includes(q))).reverse();   // 최근 런이 위로
+  sortRuns();
+  markSort();
   rPage = 0;
   const n = rRows.reduce((s, r) => s + r[R.n], 0), ng = rRows.reduce((s, r) => s + r[R.under] + r[R.over] + r[R.dbl], 0);
   $("#r-summary").innerHTML =
@@ -432,7 +486,7 @@ function drawRuns() {
     `<td class="num${r[R.under] ? " ng" : ""}">${fmtN(r[R.under])}</td><td class="num${r[R.over] ? " ng" : ""}">${fmtN(r[R.over])}</td>` +
     `<td class="num${r[R.dbl] ? " ng" : ""}">${fmtN(r[R.dbl])}</td><td class="num">${fmtF(r[R.ng], 2)}</td>` +
     `<td class="num">${fmtF(r[R.mean], 3)}</td><td class="num">${fmtF(r[R.sd], 3)}</td><td class="num">${fmtF(r[R.min], 1)}</td><td class="num">${fmtF(r[R.max], 1)}</td>` +
-    `<td class="num">${r[R.changes] || ""}</td><td>${fmtLim(r[R.first] && r[R.first].length ? r[R.first] : r[R.limits])}</td></tr>`).join("")
+    `<td class="num">${r[R.changes] || ""}</td><td>${fmtLim(runFirst(r))}</td></tr>`).join("")
     || '<tr><td colspan="20" class="note">조건에 맞는 런이 없습니다.</td></tr>';
   $("#t-runs tbody").querySelectorAll("tr[data-i]").forEach((tr) => (tr.onclick = () => { rSel = rRows[+tr.dataset.i]; markRun(); }));
   $("#t-runs tbody").querySelectorAll("[data-g]").forEach((b) => (b.onclick = (e) => {
@@ -614,6 +668,7 @@ function weightChart(box, info, rows, date) {
     g.textAlign = "right"; g.fillText(clock(Math.floor(b + 1e-9)), xl, H - m.b + 16);
     g.font = "10.8px Malgun Gothic, sans-serif"; g.fillStyle = muted;
     g.textAlign = "right"; g.fillText("시간", W - m.r, H - 4);
+    g.font = "700 10.8px Malgun Gothic, sans-serif"; g.fillStyle = css("--text");   // Y축 이름은 굵게
     g.textAlign = "left"; g.fillText("중량(g)", 4, m.t - 9);      // Y축 끝 (X축 끝의 "순번" 과 같은 방식)
     g.save(); g.beginPath(); g.rect(m.l, m.t - 4, pw(), H - m.t - m.b + 8); g.clip();
     const i0 = Math.max(0, lower(a) - 1), i1 = Math.min(n - 1, lower(b + 1e-9) + 1);
@@ -1100,35 +1155,48 @@ async function runWindow() {
     `<h2>${esc(r[R.name])} · ${esc(r[R.lot])}</h2>` +
     `<div class="note">${esc(J.device)} · ${esc(r[R.date])} ${esc(r[R.start])}–${esc(r[R.end])} · 품목 ${esc(r[R.pno])} · ${esc(J.file)}</div>` +
     '<div class="summary">' +
-    [["작업시간", workTime(r)], ["계량", fmtN(r[R.n])], ["Pass", fmtN(r[R.pass])], ["Under", fmtN(r[R.under]), r[R.under]], ["Over", fmtN(r[R.over]), r[R.over]],
-     ["Double", fmtN(r[R.dbl]), r[R.dbl]], ["불량률", fmtF(r[R.ng], 2) + "%", ng], ["평균", fmtF(r[R.mean], 3)], ["표준편차", fmtF(r[R.sd], 3)],
+    [["총 작업시간", workTime(r), "t-base"], ["계량", fmtN(r[R.n]), "t-base"], ["Pass", fmtN(r[R.pass]), "t-pass"], ["Under", fmtN(r[R.under]), "t-under"],
+     ["Over", fmtN(r[R.over]), "t-red"], ["Double", fmtN(r[R.dbl]), "t-dbl"], ["불량률", fmtF(r[R.ng], 2) + "%", "t-red"],
+     ["평균", fmtF(r[R.mean], 3)], ["표준편차", fmtF(r[R.sd], 3)],
      // 기록 시작 때의 기준만 (바뀐 값은 그래프의 기준선·변경선과 말풍선으로 본다)
      ["시작 기준 (U / P / O)", segs.length ? fmtLim([segs[0].u, segs[0].p, segs[0].o]) : ""],
-     ["기준 변경", `${segs.length - 1}회`, segs.length > 1]]
-      .map(([k, v, bad]) => `<div class="stat${bad ? " alarm" : ""}"><b>${v}</b><span>${k}</span></div>`).join("") +
+     ["기준 변경", `${segs.length - 1}회`, "t-red"]]
+      .map(([k, v, cls]) => `<div class="stat${cls ? " " + cls : ""}"><b>${v}</b><span>${k}</span></div>`).join("") +
     '<button class="btn audit-btn" title="이 런의 작업 기간에 남은 이력 (조작 · 설정 변경 · 알람)"></button></div>' +
     '<div class="legend"><span><i style="background:var(--g-pass)"></i>Pass</span><span><i style="background:var(--g-under)"></i>Under</span>' +
     '<span><i style="background:var(--g-over)"></i>Over</span>' +
     '<span title="두 제품이 너무 붙어 들어와 한 개씩 계량하지 못함 (중량이 아니라 간격으로 판정)"><i class="dbl"></i>Double (겹침)</span>' +
     '<span><i class="dash" style="color:var(--lim-hi)"></i>상한 (Over)</span><span><i class="line" style="background:var(--ok)"></i>Pass 기준</span>' +
     '<span><i class="dash" style="color:var(--lim-lo)"></i>하한 (Under)</span><span><i class="vline" style="background:var(--change)"></i>기준 변경</span></div>' +
-    segTable(segs, J.rows) +
     '<div class="chart"><canvas></canvas><div class="tip hidden"></div><div class="measure hidden"></div></div>' +
     '<div class="hover"><span class="range"></span><button class="btn reset">전체 보기</button>' +
     '<span class="yset">Y 최소 <input class="ymin" inputmode="decimal"> Y 최대 <input class="ymax" inputmode="decimal">' +
     '<button class="btn yapply">적용</button><button class="btn ydefault" title="상한(Over) +5% / 하한(Under) -5%">기본값</button>' +
     '<span class="ymsg"></span></span>' +
-    '<span>휠: 그래프·X축 바탕 → 시간 확대·축소, Y축 바탕 → 중량 확대·축소 · 드래그: 이동 · 더블클릭: 전체 시간 · 점에 커서: 측정 정보 · 점 두 개 클릭: 시간 간격 (Esc: 지우기)</span></div>';
+    '<span>휠: 그래프·X축 바탕 → 시간 확대·축소, Y축 바탕 → 중량 확대·축소 · 드래그: 이동 · 더블클릭: 전체 시간 · 점에 커서: 측정 정보 · 점 두 개 클릭: 시간 간격 (Esc: 지우기)</span></div>' +
+    // 기준 변경 내역: 그래프 아래, 기본은 접어 두고 버튼으로 펼친다
+    `<div class="seg-bar"><button class="btn seg-btn" title="검사 기준이 같은 구간별 계량 · 불량 (행을 누르면 그래프에 그 구간 표시)">` +
+    `<span class="arr">▸</span>기준 변경 내역 (${segs.length}구간)</button></div>` +
+    `<div class="seg-wrap hidden">${segTable(segs, J.rows)}</div>`;
   const chart = weightChart(el.querySelector(".chart"), el.querySelector(".hover"), J.rows, r[R.date]);
   // 검사 내용 표의 행을 누르면 그 구간의 그래프 바탕을 칠하고, 다시 누르면 지운다 (여러 행 함께 가능)
   el.querySelectorAll(".seg-table tbody tr").forEach((tr) => (tr.onclick = () => {
     tr.classList.toggle("on", chart.toggleSegment(+tr.dataset.k));
   }));
   auditButton(el, J, r);
-  // 그래프 높이 = 창 높이 - 그래프 위쪽 - 아래 조작 줄 (조작 줄은 창 폭에 따라 두 줄이 되기도 한다)
-  const draw = () => chart.resize(Math.max(220, innerHeight - el.querySelector("canvas").getBoundingClientRect().top
-    - el.querySelector(".hover").offsetHeight - 22));
+  // 그래프 높이 = 창 높이 - 그래프 위쪽 - 아래 조작 줄 - 기준 변경 내역 표 (조작 줄은 창 폭에 따라 두 줄이 되기도 한다).
+  // 창이 낮아 다 들어가지 않으면 그래프는 최소 높이를 지키고 표는 스크롤해서 본다
+  const draw = () => chart.resize(Math.max(320, innerHeight - (el.querySelector("canvas").getBoundingClientRect().top + scrollY)
+    - el.querySelector(".hover").offsetHeight - el.querySelector(".seg-bar").offsetHeight - el.querySelector(".seg-wrap").offsetHeight - 56));
   draw();
+  requestAnimationFrame(draw);   // 첫 그리기에서 아래 조작 줄(보는 구간 글자)이 채워져 높이가 바뀌므로 한 번 더 맞춘다
+  el.querySelector(".seg-btn").onclick = (e) => {
+    const wrap = el.querySelector(".seg-wrap"), open = wrap.classList.toggle("hidden") === false;
+    e.currentTarget.classList.toggle("on", open);
+    e.currentTarget.querySelector(".arr").textContent = open ? "▾" : "▸";
+    draw();   // 표를 펼치면 그래프를 줄여 한 화면에 들어오게
+    if (open) wrap.scrollIntoView({block: "nearest"});
+  };
   let t; addEventListener("resize", () => { clearTimeout(t); t = setTimeout(draw, 120); });
   // 창 크기·위치를 기억해 다음 그래프 창에 쓴다
   const save = () => { try { localStorage.setItem("wc.runwin", JSON.stringify({w: outerWidth, h: outerHeight, x: screenX, y: screenY})); } catch (e) {} };
