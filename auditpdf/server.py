@@ -291,7 +291,8 @@ def serve(args, build_data, render):
             if not self.check_access():
                 return
             url = urlparse(self.path)
-            q = parse_qs(url.query)
+            # keep_blank_values: '?reload', '&norows' 처럼 값 없는 표시는 기본값이면 버려져 다시 읽기가 안 됐다
+            q = parse_qs(url.query, keep_blank_values=True)
             try:
                 if url.path == "/wc" or url.path.startswith("/wc/"):   # 중량선별기 운영 화면 (보기 전용)
                     return lab.get(self, url.path, q, live=True, admin=self.admin())
