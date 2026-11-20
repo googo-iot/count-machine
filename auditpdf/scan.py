@@ -97,9 +97,9 @@ def walk_pdfs(root, found=None, cancel=None):
 
     os.scandir 로 폴더를 한 번만 훑는다. Windows 에서는 폴더 목록에 크기·수정 시각이 함께 오므로
     파일마다 stat 을 따로 묻지 않는다 (네트워크 공유에서 파일마다 왕복하면 수천 건에 몇 분이 걸린다).
-    found(n) 은 폴더 하나를 훑을 때마다 지금까지 찾은 개수로 부른다. cancel 이 set 되면 멈춘다.
+    found(n, dirs) 는 폴더 하나를 훑을 때마다 지금까지 찾은 PDF 개수와 훑은 폴더 수로 부른다. cancel 이 set 되면 멈춘다.
     """
-    out, stack = [], [str(root)]
+    out, stack, dirs = [], [str(root)], 0
     while stack:
         if cancel is not None and cancel.is_set():
             raise Cancelled()
@@ -108,6 +108,7 @@ def walk_pdfs(root, found=None, cancel=None):
                 entries = list(it)
         except OSError:
             continue  # 권한 없는 폴더 등은 rglob 처럼 건너뛴다
+        dirs += 1
         for e in entries:
             try:
                 if e.is_dir(follow_symlinks=False):
@@ -117,7 +118,7 @@ def walk_pdfs(root, found=None, cancel=None):
             except OSError:
                 continue
         if found:
-            found(len(out))
+            found(len(out), dirs)
     out.sort(key=lambda ps: (str(ps[0].parent).lower(), ps[0].name.lower()))
     return out
 
@@ -201,8 +202,8 @@ def scan(root, progress=None, cancel=None):
     progress(done, total, name) 는 파일을 시작할 때마다 부른다. cancel 이 set 되면 다음 파일에서 멈춘다.
     """
     root = Path(root).resolve()
-    # 찾는 동안에는 total=0, done=찾은 개수, name="" 로 알린다
-    pdfs = walk_pdfs(root, (lambda n: progress(n, 0, "")) if progress else None, cancel)
+    # 찾는 동안에는 total=0, done=찾은 개수, name=훑은 폴더 수 로 알린다
+    pdfs = walk_pdfs(root, (lambda n, dirs: progress(n, 0, f"폴더 {dirs:,}개 확인")) if progress else None, cancel)
     result = Scan(root)
     for seq, (path, stat) in enumerate(pdfs, start=1):
         if cancel is not None and cancel.is_set():

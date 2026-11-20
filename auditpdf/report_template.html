@@ -166,10 +166,15 @@ tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .note { color: var(--muted); font-size: 12.6px; }
 
 /* 읽는 중 */
-.job { margin: 40px auto; max-width: 640px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 22px 24px; }
-.job h2 { margin: 0 0 6px; font-size: 16.2px; }
-.track { height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; margin: 14px 0 8px; }
+.job { margin: 0 0 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+.job h2 { margin: 0 0 4px; font-size: 14.4px; }
+.job .note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.track { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; margin: 10px 0 6px; }
 .fill { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+/* 진행 중 표시: 글자 앞의 작은 원이 천천히 돈다 (전체 개수를 모르는 동안 막대는 비워 둔다) */
+.job .spin { display: inline-block; width: 11px; height: 11px; margin-right: 7px; vertical-align: -1px;
+  border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: job-spin 1.2s linear infinite; }
+@keyframes job-spin { to { transform: rotate(360deg); } }
 .job .row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 .job .name { color: var(--muted); font-size: 12.6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -269,7 +274,7 @@ tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
     <div class="note" id="job-root"></div>
     <div class="track"><div class="fill" id="job-fill"></div></div>
     <div class="row">
-      <span id="job-count">준비 중…</span>
+      <span><span class="spin"></span><span id="job-count">준비 중…</span></span>
       <button class="btn admin" id="job-cancel">중지</button>
     </div>
     <div class="name" id="job-name"></div>
@@ -454,7 +459,7 @@ addEventListener("resize", () => fitTables());
 function showTab(t) {
   tab = t;
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
-  for (const v of TABS) $("#v-" + v).classList.toggle("hidden", v !== t || !!DATA.job);
+  for (const v of TABS) $("#v-" + v).classList.toggle("hidden", v !== t);
   $("#btn-csv").classList.toggle("hidden", t !== "audit" || !!DATA.job);
   try { sessionStorage.setItem("auditpdf.tab", t); } catch (e) {}
   fitTables();
@@ -537,7 +542,7 @@ function table(el, cols, rows, opts = {}) {
     "</tr></thead><tbody>" +
     (shown.length ? shown.map((r, i) => `<tr class="${opts.rowClass ? opts.rowClass(r) : ""}" data-r="${start + i}">` +
       cols.map((c) => `<td class="${c.cls ? (typeof c.cls === "function" ? c.cls(r) : c.cls) : c.num ? "num" : ""}">${c.html ? c.html(r) : esc(c.get(r))}</td>`).join("") +
-      "</tr>").join("") : `<tr><td colspan="${cols.length}" class="empty">표시할 항목이 없습니다.</td></tr>`) + "</tbody>";
+      "</tr>").join("") : `<tr><td colspan="${cols.length}" class="empty">${DATA.job ? "PDF 를 읽는 중입니다. 다 읽으면 자동으로 표시됩니다." : "표시할 항목이 없습니다."}</td></tr>`) + "</tbody>";
   applyWidths(el, widths);
   el.querySelectorAll("th .rz").forEach((h) => {
     h.onpointerdown = (e) => startResize(el, +h.parentNode.dataset.i, e);
@@ -1615,7 +1620,8 @@ async function poll() {
     const s = await (await fetch("/api/status?" + devQ, {cache: "no-store"})).json();
     if (!s.running) return location.replace("/?" + devQ);
     $("#job-fill").style.width = s.total ? (100 * s.done / s.total).toFixed(1) + "%" : "0";
-    $("#job-count").textContent = s.total ? `${fmtN(s.done)} / ${fmtN(s.total)} 파일` : `PDF 를 찾는 중… ${s.done ? fmtN(s.done) + "개" : ""}`;
+    $("#job-count").textContent = s.total ? `${fmtN(s.done)} / ${fmtN(s.total)} 파일 (${Math.floor(100 * s.done / s.total)}%)`
+      : `PDF 를 찾는 중… ${fmtN(s.done)}개 찾음`;
     $("#job-name").textContent = s.name || "";
   } catch (e) { $("#job-count").textContent = "서버에 연결할 수 없습니다."; }
   setTimeout(poll, 500);
@@ -1627,8 +1633,14 @@ if (DATA.job) {
   $("#job").classList.remove("hidden");
   $("#job-root").textContent = DATA.source;
   document.querySelectorAll("#hbtns .btn:not(#btn-root):not(#btn-access):not(#btn-add)").forEach((b) => b.classList.add("hidden"));
-  $("#tabs").classList.add("hidden");
-  showTab("audit");
+  // 화면은 먼저 열어 두고(빈 표), 위쪽에 진행률을 보여 준다. 다 읽으면 새로 고쳐 내용을 채운다
+  $("#btn-xlsx").disabled = true;
+  filterAudit();
+  drawFiles();
+  drawBatch();
+  let saved = "audit";
+  try { saved = sessionStorage.getItem("auditpdf.tab") || "audit"; } catch (e) {}
+  showTab(TABS.includes(saved) ? saved : "audit");
   poll();
 } else {
   filterAudit();
